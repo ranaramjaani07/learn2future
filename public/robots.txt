@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin/dashboard
+Disallow: /admin/login
+
+# Generative Engine Optimization index references
+Sitemap: https://learn2future.vercel.app/sitemap.xml
+llms: https://learn2future.vercel.app/llms.txt

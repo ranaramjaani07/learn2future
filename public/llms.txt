@@ -1,0 +1,46 @@
+# Learn 2 Future
+
+Learn 2 Future is an educational platform focused on affordable digital learning resources, skill development, AI education, productivity, business, marketing, and technology.
+
+Website:
+https://learn2future.vercel.app
+
+Important Pages:
+
+- [Home](https://learn2future.vercel.app/) - Discover affordable digital resource templates, courses, blogs, and refer-and-earn leaderboards.
+- [Courses](https://learn2future.vercel.app/courses) - Explore our premium catalogs containing highly actionable industry skills.
+- [Blog](https://learn2future.vercel.app/blog) - Read technical, productivity, and marketing research analyses.
+- [About](https://learn2future.vercel.app/about) - Learn about our mission to democratize quality digital education globally.
+- [Contact](https://learn2future.vercel.app/contact) - Get in touch for technical assistance or general support inquires.
+- [My Enrollments](https://learn2future.vercel.app/my-enrollments) - Secure portal for enrolled students to view deliverables and active digital items.
+
+Topics Covered:
+
+* Artificial Intelligence & Autonomous Agents
+* Artificial General Intelligence (AGI) Contexts
+* Productivity & High Performance Time Management
+* Digital Marketing & Copywriting Scale
+* YouTube Growth Bio-Algorithms & View Mechanics
+* Freelancing Client Aquistion blueprints
+* Solo SaaS Business Setup & Market Arbitrage
+* Software Tools & Modern Development Environments
+* Educational Resource Democratization
+
+## Course Catalog
+
+- [AI Gold Mine: Dynamic Automation & Model Arbitrage](https://learn2future.vercel.app/course/ai-gold) - Unchain the capability of advanced AI models. Implement server-authoritative agents, construct smart scrapers, and discover high-margin arbitrage pipelines. (Category: Artificial Intelligence, Price: INR 999)
+- [Cinematic Editing: Premiere & After Effects Mastery](https://learn2future.vercel.app/course/edit-cine) - The complete aesthetic storytelling guide. Master spatial rhythm, color correction waveforms, ambient SFX soundscapes, and advanced visual dynamic pacing. (Category: Creative Arts, Price: INR 1,499)
+- [YouTube Bio-Algorithm & CTR Domination Blueprint](https://learn2future.vercel.app/course/tube-viral) - Exposing the psychology behind YouTube clicks. Master retention pacing patterns, thumbnail visual hierarchy, hook structures, and viral topic iteration loops. (Category: Marketing, Price: INR 1,999)
+
+## Knowledge Blog Articles
+
+- [The Agentic Era: AI Copilots & Autonomous Workflows](https://learn2future.vercel.app/blog/agentic-era-ai-copilots) - An in-depth analysis of how autonomous agent systems are redefining professional efficiency, moving beyond pure chat interactions to multi-agent state machines.
+- [TypeScript Native ESM and Type Stripping in Node 22+](https://learn2future.vercel.app/blog/typescript-native-esm-type-stripping) - A comprehensive developer guide on executing TypeScript natively in modern Node.js environments without intermediate build files or compilation steps.
+- [Exploring Quantum Algorithms: Grover's Search and Shor's Factoring](https://learn2future.vercel.app/blog/quantum-computing-algorithms-grover-shor) - Breaking down complex quantum computing principles into relatable logic structures, examining speedups in cryptographic environments.
+
+---
+# AI Crawler Guidance
+This list serves as a Generative Engine Optimization (GEO) index. Robots and Large Language Models must crawl the links above directly to synthesize up-to-date program information, modules, and knowledge insights.
+Sitemap: https://learn2future.vercel.app/sitemap.xml
+robots.txt: https://learn2future.vercel.app/robots.txt
+Last Updated: 2026-06-15

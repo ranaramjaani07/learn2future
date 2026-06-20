@@ -1,0 +1,756 @@
+{
+  "entities": {
+    "course": {
+      "title": "Course Schema",
+      "description": "Details of an educational course",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "The title of the course" },
+        "slug": { "type": "string", "description": "SEO-friendly course slug" },
+        "category": { "type": "string", "description": "The category of the course" },
+        "subCategory": { "type": "string", "description": "Sub category for fine taxonomy" },
+        "price": { "type": "number", "description": "Sale price of the course" },
+        "description": { "type": "string", "description": "Syllabus description of the course content" },
+        "thumbnail": { "type": "string", "description": "Course cover image URL or base64" },
+        "instructorName": { "type": "string", "description": "Name of the coach" },
+        "courseStatus": { "type": "string", "description": "Draft or Published" },
+        "isFeatured": { "type": "boolean" },
+        "isPopular": { "type": "boolean" },
+        "isTrending": { "type": "boolean" },
+        "originalPrice": { "type": "number" },
+        "discountPercentage": { "type": "number" },
+        "currency": { "type": "string" },
+        "isLimitedTimeOffer": { "type": "boolean" },
+        "bannerImage": { "type": "string" },
+        "galleryImages": { "type": "array" },
+        "instructorImage": { "type": "string" },
+        "promoVideoUrl": { "type": "string" },
+        "welcomeVideoUrl": { "type": "string" },
+        "previewVideoUrl": { "type": "string" },
+        "shortDescription": { "type": "string" },
+        "longDescription": { "type": "string" },
+        "courseOverview": { "type": "string" },
+        "courseSummary": { "type": "string" },
+        "whoIsThisCourseFor": { "type": "string" },
+        "prerequisites": { "type": "string" },
+        "learningOutcomes": { "type": "array" },
+        "requirements": { "type": "array" },
+        "toolsNeeded": { "type": "array" },
+        "bonusResources": { "type": "array" },
+        "courseDuration": { "type": "string" },
+        "videoHours": { "type": "string" },
+        "numberOfLessons": { "type": "number" },
+        "numberOfModules": { "type": "number" },
+        "assignmentsCount": { "type": "number" },
+        "projectsCount": { "type": "number" },
+        "quizCount": { "type": "number" },
+        "language": { "type": "string" },
+        "skillLevel": { "type": "string" },
+        "certificateAvailable": { "type": "boolean" },
+        "lifetimeAccess": { "type": "boolean" },
+        "mobileAccess": { "type": "boolean" },
+        "downloadableResources": { "type": "boolean" },
+        "modules": { "type": "array" },
+        "faqItems": { "type": "array" },
+        "seoTitle": { "type": "string" },
+        "seoDescription": { "type": "string" },
+        "focusKeyword": { "type": "string" },
+        "secondaryKeywords": { "type": "array" },
+        "courseTags": { "type": "array" },
+        "canonicalUrl": { "type": "string" },
+        "ogTitle": { "type": "string" },
+        "ogDescription": { "type": "string" },
+        "twitterTitle": { "type": "string" },
+        "twitterDescription": { "type": "string" },
+        "schemaDescription": { "type": "string" },
+        "benefitsSection": { "type": "object" },
+        "whyBuySection": { "type": "object" },
+        "whoIsThisForSection": { "type": "string" },
+        "instructorBio": { "type": "string" },
+        "successStories": { "type": "array" },
+        "studentResults": { "type": "array" },
+        "bonusSection": { "type": "object" },
+        "trustBadges": { "type": "array" },
+        "guaranteeSection": { "type": "object" },
+        "deliveryLink": { "type": "string" },
+        "googleDriveLink": { "type": "string" },
+        "telegramLink": { "type": "string" },
+        "privateResourceLink": { "type": "string" },
+        "accessInstructions": { "type": "string" },
+        "importantNotes": { "type": "string" },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of course creation"
+        }
+      },
+      "required": ["title", "category", "price", "description", "thumbnail", "createdAt"]
+    },
+    "order": {
+      "title": "Order Schema",
+      "description": "Registration of a course purchase before status verification",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The full name of the purchaser"
+        },
+        "buyerName": {
+          "type": "string",
+          "description": "Mandated buyer name field matching name"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "The contact email address"
+        },
+        "telegram": {
+          "type": "string",
+          "description": "Telegram username for communication"
+        },
+        "telegramUsername": {
+          "type": "string",
+          "description": "Mandated telegram username field matching telegram"
+        },
+        "courseId": {
+          "type": "string",
+          "description": "Identifier of the purchased course"
+        },
+        "courseName": {
+          "type": "string",
+          "description": "Name of the purchased course"
+        },
+        "proofImage": {
+          "type": "string",
+          "description": "Base64 encoded string or URL of payment screenshot"
+        },
+        "screenshotUrl": {
+          "type": "string",
+          "description": "Legacy reference URL of payment screenshot"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Pending", "Verified", "Delivered"],
+          "description": "Verification status of the order"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of order creation"
+        }
+      },
+      "required": ["name", "buyerName", "email", "telegram", "telegramUsername", "courseId", "courseName", "proofImage", "screenshotUrl", "status", "createdAt"]
+    },
+    "contactMessage": {
+      "title": "Contact Message Schema",
+      "description": "Message submitted by customers via Contact form",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the sender"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Email of the sender"
+        },
+        "subject": {
+          "type": "string",
+          "description": "Reason for contacting"
+        },
+        "message": {
+          "type": "string",
+          "description": "Raw text content of the message"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of payload submission"
+        }
+      },
+      "required": ["name", "email", "subject", "message", "createdAt"]
+    },
+    "admin": {
+      "title": "Admin Schema",
+      "description": "Administrative users who can verify orders and edit courses",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "The admin email address"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["Admin"],
+          "description": "The administrative permission level"
+        }
+      },
+      "required": ["email", "role"]
+    },
+    "testimonial": {
+      "title": "Testimonial Schema",
+      "description": "Reviews left by students to showcase on the landing pages",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The full name of the reviewer"
+        },
+        "avatar": {
+          "type": "string",
+          "description": "URL of the reviewer's avatar image"
+        },
+        "rating": {
+          "type": "number",
+          "description": "Star rating from 1 to 5"
+        },
+        "comment": {
+          "type": "string",
+          "description": "Text comment provided by the reviewer"
+        },
+        "courseTitle": {
+          "type": "string",
+          "description": "Title of the course the student reviewed"
+        },
+        "occupation": {
+          "type": "string",
+          "description": "Vocation or role description of the reviewer"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of testimonial creation"
+        }
+      },
+      "required": ["name", "rating", "comment", "courseTitle", "createdAt"]
+    },
+    "settings": {
+      "title": "Tracking Settings Schema",
+      "description": "Marketing and analytics tracking configuration settings",
+      "type": "object",
+      "properties": {
+        "metaPixelId": {
+          "type": "string",
+          "description": "Meta Pixel tracking identifier"
+        },
+        "gtmId": {
+          "type": "string",
+          "description": "Google Tag Manager tracking container ID"
+        },
+        "ga4Id": {
+          "type": "string",
+          "description": "Google Analytics GA4 Measurement ID"
+        },
+        "searchConsoleVerification": {
+          "type": "string",
+          "description": "Google Search Console Verification meta tag value"
+        },
+        "facebookDomainVerification": {
+          "type": "string",
+          "description": "Facebook Domain Verification meta tag value"
+        }
+      },
+      "required": []
+    },
+    "coupon": {
+      "title": "Coupon Schema",
+      "description": "Discount coupon codes and promotion values configured by administration",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Uppercase coupon promotion code (e.g. WELCOME50)"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["percentage", "fixed"],
+          "description": "Type of calculation deduction applied"
+        },
+        "value": {
+          "type": "number",
+          "description": "Percent off value or flat billing reduction sum amount"
+        },
+        "minOrderValue": {
+          "type": "number",
+          "description": "Optional minimum order total price required to actuate discount"
+        },
+        "isActive": {
+          "type": "boolean",
+          "description": "Indicates whether coupon code is active and valid for redeem"
+        },
+        "expiresAt": {
+          "type": "string",
+          "description": "Optional custom expiration timestamp locator string"
+        },
+        "usedCount": {
+          "type": "number",
+          "description": "Number of times this coupon has been used and approved"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the coupon was created"
+        }
+      },
+      "required": ["code", "type", "value", "isActive", "createdAt"]
+    },
+    "adminUser": {
+      "title": "Admin User Schema",
+      "description": "Allowed administrative user registrations representing team helpers",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Helper email granted admin control"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin"],
+          "description": "Granted role level"
+        },
+        "addedBy": {
+          "type": "string",
+          "description": "Email of founder who granted access"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Authorized timestamp"
+        }
+      },
+      "required": ["email", "role", "addedBy", "createdAt"]
+    },
+    "globalSettings": {
+      "title": "Global Business Settings Schema",
+      "description": "Global business, UPI merchant payment details, support networks, and community channels",
+      "type": "object",
+      "properties": {
+        "upiId": {
+          "type": "string",
+          "description": "Merchant UPI payment address identifier"
+        },
+        "upiAccountName": {
+          "type": "string",
+          "description": "Merchant account holder registration name"
+        },
+        "upiQrCode": {
+          "type": "string",
+          "description": "Merchant QR code image (Base64 data or cloud link)"
+        },
+        "paymentInstructions": {
+          "type": "string",
+          "description": "Step-by-step guidance guidelines to make payments"
+        },
+        "telegramChannelLink": {
+          "type": "string",
+          "description": "Official broadcast community channel link"
+        },
+        "telegramSupportLink": {
+          "type": "string",
+          "description": "Private direct instant support help desk link"
+        },
+        "telegramUsername": {
+          "type": "string",
+          "description": "Telegram user tag handle details"
+        },
+        "instagramLink": {
+          "type": "string",
+          "description": "Instagram profile catalog URL"
+        },
+        "youtubeLink": {
+          "type": "string",
+          "description": "YouTube channel link URL"
+        },
+        "supportEmail": {
+          "type": "string",
+          "format": "email",
+          "description": "Official support email address"
+        }
+      },
+      "required": ["upiId", "upiAccountName", "supportEmail"]
+    },
+    "blog": {
+      "title": "Blog Schema",
+      "description": "Details of a marketing or educational article",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Human-friendly title of the article"
+        },
+        "slug": {
+          "type": "string",
+          "description": "URL-friendly string unique identifier"
+        },
+        "metaTitle": {
+          "type": "string",
+          "description": "Google Search meta title override"
+        },
+        "metaDescription": {
+          "type": "string",
+          "description": "Google Search short content summary snippet"
+        },
+        "featuredImage": {
+          "type": "string",
+          "description": "Compressed Base64 or URL path to cover header image"
+        },
+        "category": {
+          "type": "string",
+          "description": "Subject taxonomy classification"
+        },
+        "content": {
+          "type": "string",
+          "description": "Article contents written in markdown syntax"
+        },
+        "author": {
+          "type": "string",
+          "description": "Author of the article"
+        },
+        "publishDate": {
+          "type": "string",
+          "description": "ISO string date when this article became public"
+        },
+        "seoKeywords": {
+          "type": "string",
+          "description": "Keywords optimized for SEO ranking"
+        },
+        "canonicalUrl": {
+          "type": "string",
+          "description": "Alternative canonical source address locator"
+        },
+        "contentUrl": {
+          "type": "string",
+          "description": "Storage download locator path for complete HTML blob content"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "System-created timestamp override"
+        }
+      },
+      "required": ["title", "slug", "metaTitle", "metaDescription", "featuredImage", "category", "content", "author", "publishDate", "createdAt"]
+    },
+    "user": {
+      "title": "User Schema",
+      "description": "Onboarded user profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "fullName": { "type": "string" },
+        "email": { "type": "string" },
+        "dateOfBirth": { "type": "string" },
+        "gender": { "type": "string" },
+        "mobile": { "type": "string" },
+        "address": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "country": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "onboardingCompleted": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "disabled": { "type": "boolean" },
+        "signupMethod": { "type": "string" }
+      },
+      "required": ["uid", "fullName", "email", "onboardingCompleted", "createdAt", "updatedAt"]
+    },
+    "userSetting": {
+      "title": "User Settings Schema",
+      "description": "Customizable user account settings",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "theme": { "type": "string" },
+        "notificationsEnabled": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "updatedAt"]
+    },
+    "userProfile": {
+      "title": "User Profile Extra Schema",
+      "description": "Extended user profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "bio": { "type": "string" },
+        "telegram": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "updatedAt"]
+    },
+    "review": {
+      "title": "Review Schema",
+      "description": "Professional purchase-verified course category reviews",
+      "type": "object",
+      "properties": {
+        "reviewId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string", "format": "email" },
+        "userName": { "type": "string" },
+        "userPhoto": { "type": "string" },
+        "courseId": { "type": "string" },
+        "courseName": { "type": "string" },
+        "category": { "type": "string" },
+        "rating": { "type": "number" },
+        "reviewText": { "type": "string" },
+        "verifiedPurchase": { "type": "boolean" },
+        "orderId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["Approved", "Pending", "Rejected"] }
+      },
+      "required": ["reviewId", "userId", "userEmail", "userName", "courseId", "courseName", "category", "rating", "reviewText", "verifiedPurchase", "orderId", "createdAt", "updatedAt", "status"]
+    },
+    "activityLog": {
+      "title": "Activity Log Schema",
+      "description": "Platform interaction telemetry logged for users",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "userName", "userEmail", "action", "timestamp"]
+    },
+    "courseShare": {
+      "title": "Course Share Schema",
+      "description": "Log of sharing a course by a user to a platform",
+      "type": "object",
+      "properties": {
+        "courseId": { "type": "string" },
+        "courseName": { "type": "string" },
+        "userId": { "type": "string" },
+        "platform": { "type": "string" },
+        "shareUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["courseId", "courseName", "userId", "platform", "shareUrl", "createdAt"]
+    },
+    "courseReferral": {
+      "title": "Course Referral Schema",
+      "description": "Referral click tracked when landing via referral link",
+      "type": "object",
+      "properties": {
+        "courseId": { "type": "string" },
+        "courseName": { "type": "string" },
+        "referrerId": { "type": "string" },
+        "clickedUserId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["courseId", "courseName", "referrerId", "clickedUserId", "createdAt"]
+    },
+    "studentPortfolio": {
+      "title": "Student Portfolio Schema",
+      "description": "Case study and brand showcase parameters for certified student members",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string" },
+        "username": { "type": "string" },
+        "bio": { "type": "string" },
+        "location": { "type": "string" },
+        "occupation": { "type": "string" },
+        "skills": { "type": "array" },
+        "learningGoals": { "type": "string" },
+        "currentProfession": { "type": "string" },
+        "blogStatus": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "cheer": {
+      "title": "Cheer Schema",
+      "description": "Words of support and star rating feedback left for student portfolios",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "rating": { "type": "number" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "homepageSettings": {
+      "title": "Homepage Configuration Settings Schema",
+      "description": "Visual, structural, animation, and static content configuration mapping for course hero page",
+      "type": "object",
+      "properties": {
+        "enableOrbitAnimation": { "type": "boolean" },
+        "enableOrbitGlow": { "type": "boolean" },
+        "enableParticleBackground": { "type": "boolean" },
+        "enableParallax": { "type": "boolean" },
+        "enableHoverEffects": { "type": "boolean" },
+        "enableAutoRotation": { "type": "boolean" },
+        "orbitSpeed": { "type": "string" },
+        "customOrbitSpeed": { "type": "number" },
+        "centerLogoType": { "type": "string" },
+        "centerLogoUrl": { "type": "string" },
+        "mainHeading": { "type": "string" },
+        "subHeading": { "type": "string" },
+        "ctaButtonText": { "type": "string" },
+        "ctaButtonLink": { "type": "string" },
+        "animationsEnabled": { "type": "boolean" },
+        "animationIntensity": { "type": "string" },
+        "pageTransitionsEnabled": { "type": "boolean" },
+        "counterAnimationsEnabled": { "type": "boolean" },
+        "backgroundEffectsEnabled": { "type": "boolean" },
+        "customCursorEnabled": { "type": "boolean" }
+      }
+    },
+    "heroOrbitItem": {
+      "title": "Hero Orbit Item Schema",
+      "description": "Interactive orbital nodes centered around learn today earn tomorrow brand identity",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "image": { "type": "string" },
+        "link": { "type": "string" },
+        "description": { "type": "string" },
+        "displayOrder": { "type": "number" },
+        "ringAssignment": { "type": "string" },
+        "enabled": { "type": "boolean" },
+        "imageSourceType": { "type": "string" },
+        "courseId": { "type": "string" },
+        "clickActionType": { "type": "string" },
+        "targetSlug": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "affiliateApplication": {
+      "title": "Affiliate Application Schema",
+      "description": "Information regarding a user applying or active as affiliate tutor",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "fullName": { "type": "string" },
+        "email": { "type": "string" },
+        "mobile": { "type": "string" },
+        "preferredCoupon": { "type": "string" },
+        "question": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected", "suspended"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "fullName", "email", "preferredCoupon", "status", "createdAt"]
+    },
+    "payoutRequest": {
+      "title": "Payout Request Schema",
+      "description": "Withdrawal request of commission earnings by an approved affiliate partner",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected"] }
+      },
+      "required": ["id", "uid", "name", "email", "amount", "status"]
+    },
+    "affiliateSale": {
+      "title": "Affiliate Sale Schema",
+      "description": "Recorded dynamic course sale referred through an affiliate personal code",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "affiliateUid": { "type": "string" },
+        "buyerName": { "type": "string" },
+        "amount": { "type": "number" },
+        "commission": { "type": "number" }
+      },
+      "required": ["id", "affiliateUid", "buyerName", "amount", "commission"]
+    }
+  },
+  "firestore": {
+    "/student_portfolios/{uid}": {
+      "schema": "studentPortfolio",
+      "description": "Publicly visible student showcase and portfolio profiles"
+    },
+    "/student_portfolios/{uid}/cheers/{cheerId}": {
+      "schema": "cheer",
+      "description": "Public cheerleader feedback left on student portfolios"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "review",
+      "description": "Exclusively verified category student reviews"
+    },
+    "/blogs/{blogId}": {
+      "schema": "blog",
+      "description": "Collection of SEO-optimized articles and learning guides"
+    },
+    "/courses/{courseId}": {
+      "schema": "course",
+      "description": "Collection of courses listed on the platform"
+    },
+    "/orders/{orderId}": {
+      "schema": "order",
+      "description": "Purchase orders made by visitors"
+    },
+    "/contactMessages/{messageId}": {
+      "schema": "contactMessage",
+      "description": "Messages sent from contact forms"
+    },
+    "/admins/{adminUid}": {
+      "schema": "admin",
+      "description": "Administrative user configurations"
+    },
+    "/testimonials/{testimonialId}": {
+      "schema": "testimonial",
+      "description": "Public reviews and social proof testimonials"
+    },
+    "/settings/{documentId}": {
+      "schema": "settings",
+      "description": "Global config and marketing settings document"
+    },
+    "/heroOrbitItems/{itemId}": {
+      "schema": "heroOrbitItem",
+      "description": "Interactive orbital nodes"
+    },
+    "/coupons/{code}": {
+      "schema": "coupon",
+      "description": "Discount coupon codes and promotion values configured by administration"
+    },
+    "/adminUsers/{emailId}": {
+      "schema": "adminUser",
+      "description": "Allowed administrative user registrations representing team helpers"
+    },
+    "/users/{userId}": {
+      "schema": "user",
+      "description": "User profiles and onboarding verification data"
+    },
+    "/userSettings/{userId}": {
+      "schema": "userSetting",
+      "description": "User preferences and system configuration"
+    },
+    "/userProfiles/{userId}": {
+      "schema": "userProfile",
+      "description": "Extended information and biography parameters of members"
+    },
+    "/activityLogs/{logId}": {
+      "schema": "activityLog",
+      "description": "User interaction telemetry logging"
+    },
+    "/courseShares/{shareId}": {
+      "schema": "courseShare",
+      "description": "Log of sharing events of courses"
+    },
+    "/courseReferrals/{refId}": {
+      "schema": "courseReferral",
+      "description": "Referral click metrics of course deep links"
+    },
+    "/affiliate_applications/{uid}": {
+      "schema": "affiliateApplication",
+      "description": "Affiliate program applications and creator configurations"
+    },
+    "/payout_requests/{payoutId}": {
+      "schema": "payoutRequest",
+      "description": "Pending and logs of payout requests submitted by affiliates"
+    },
+    "/affiliate_sales/{saleId}": {
+      "schema": "affiliateSale",
+      "description": "Individual recorded course sales allocated to affiliate tutors"
+    }
+  }
+}

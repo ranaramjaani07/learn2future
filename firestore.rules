@@ -1,0 +1,662 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net - Default Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- REUSABLE SECURITY PRIMITIVES & HELPERS ---
+    
+    function isValidId(id) {
+       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email != null && request.auth.token.email == "digitalcoursesbay@gmail.com") || 
+        request.auth.uid == "7FLbcBGlHAPKxnFc8V0ypY3DPKq2" ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email != null && exists(/databases/$(database)/documents/adminUsers/$(request.auth.token.email)))
+      );
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- SCHEMA VALIDATION BLUEPRINTS ---
+
+    function isValidCourse(data) {
+      return data.keys().hasAll(['title', 'category', 'price', 'description', 'thumbnail', 'createdAt'])
+        && data.keys().size() >= 6 && data.keys().size() <= 85
+        && data.title is string && data.title.size() <= 150
+        && data.category is string && data.category.size() <= 60
+        && data.price is number && data.price >= 0
+        && data.description is string && data.description.size() <= 50000
+        && data.thumbnail is string && data.thumbnail.size() <= 1000000
+        && (!('slug' in data) || (data.slug is string && data.slug.size() <= 200))
+        && (!('deliverableLink' in data) || (data.deliverableLink is string && data.deliverableLink.size() <= 1000))
+        && (!('welcomeVideoUrl' in data) || (data.welcomeVideoUrl is string && data.welcomeVideoUrl.size() <= 2000))
+        && (!('deliveryInstructions' in data) || (data.deliveryInstructions is string && data.deliveryInstructions.size() <= 5000))
+        && (!('deliveryUrl' in data) || (data.deliveryUrl is string && data.deliveryUrl.size() <= 2000))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidCourseUpdate(data) {
+      return data.keys().hasAll(['title', 'category', 'price', 'description', 'thumbnail'])
+        && data.keys().size() >= 5 && data.keys().size() <= 85
+        && data.title is string && data.title.size() <= 150
+        && data.category is string && data.category.size() <= 60
+        && data.price is number && data.price >= 0
+        && data.description is string && data.description.size() <= 50000
+        && (!('slug' in data) || (data.slug is string && data.slug.size() <= 200))
+        && (!('deliverableLink' in data) || (data.deliverableLink is string && data.deliverableLink.size() <= 1000))
+        && (!('welcomeVideoUrl' in data) || (data.welcomeVideoUrl is string && data.welcomeVideoUrl.size() <= 2000))
+        && (!('deliveryInstructions' in data) || (data.deliveryInstructions is string && data.deliveryInstructions.size() <= 5000))
+        && (!('deliveryUrl' in data) || (data.deliveryUrl is string && data.deliveryUrl.size() <= 2000))
+        && data.thumbnail is string && data.thumbnail.size() <= 1000000;
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll(['name', 'buyerName', 'email', 'telegram', 'telegramUsername', 'courseId', 'courseName', 'price', 'proofImage', 'screenshotUrl', 'status', 'createdAt'])
+        && data.keys().size() >= 12 && data.keys().size() <= 25
+        && data.name is string && data.name.size() <= 100
+        && data.buyerName is string && data.buyerName.size() <= 100
+        && data.email is string && data.email.size() <= 120
+        && data.telegram is string && data.telegram.size() <= 100
+        && data.telegramUsername is string && data.telegramUsername.size() <= 100
+        && data.courseId is string && data.courseId.size() <= 128
+        && data.courseName is string && data.courseName.size() <= 200
+        && data.price is number && data.price >= 0
+        && data.screenshotUrl is string && data.screenshotUrl.size() <= 10000000
+        && data.proofImage is string && data.proofImage.size() <= 10000000
+        && (!('id' in data) || (data.id is string && data.id.size() <= 128))
+        && (!('userId' in data) || (data.userId is string && data.userId.size() <= 128))
+        && (!('paymentType' in data) || (data.paymentType is string && data.paymentType.size() <= 128))
+        && (!('razorpayOrderId' in data) || (data.razorpayOrderId is string && data.razorpayOrderId.size() <= 128))
+        && (!('razorpayPaymentId' in data) || (data.razorpayPaymentId is string && data.razorpayPaymentId.size() <= 128))
+        && (!('originalPrice' in data) || data.originalPrice is number)
+        && (!('discountApplied' in data) || data.discountApplied is number)
+        && (!('couponCode' in data) || data.couponCode is string || data.couponCode == null)
+        && (!('purchasedAt' in data) || data.purchasedAt is timestamp || data.purchasedAt == null)
+        && (!('deliveredAt' in data) || data.deliveredAt is timestamp || data.deliveredAt == null)
+        && (!('accessCount' in data) || data.accessCount is number)
+        && (!('lastAccessTime' in data) || data.lastAccessTime is timestamp || data.lastAccessTime == null)
+        && data.status in ['Pending', 'Verified', 'Delivered', 'Approved', 'pending', 'verified', 'delivered', 'approved']
+        && data.createdAt is timestamp;
+    }
+
+    function isValidCoupon(data) {
+      return data.keys().hasAll(['code', 'type', 'value', 'isActive', 'createdAt'])
+        && data.keys().size() >= 5 && data.keys().size() <= 9
+        && data.code is string && data.code.size() <= 50
+        && data.type in ['percentage', 'fixed']
+        && data.value is number && data.value >= 0
+        && data.isActive is bool
+        && (!('minOrderValue' in data) || data.minOrderValue is number)
+        && (!('expiresAt' in data) || data.expiresAt is string || data.expiresAt == null)
+        && (!('usedCount' in data) || data.usedCount is number)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidAdminUser(data) {
+      return data.keys().hasAll(['email', 'role', 'addedBy', 'createdAt'])
+        && data.email is string && data.email.size() <= 150
+        && data.role == 'admin'
+        && data.addedBy is string && data.addedBy.size() <= 150
+        && data.createdAt is timestamp;
+    }
+
+    function isValidContactMessage(data) {
+      return data.keys().hasAll(['name', 'email', 'subject', 'message', 'createdAt'])
+        && data.keys().size() >= 5 && data.keys().size() <= 7
+        && data.name is string && data.name.size() <= 100
+        && data.email is string && data.email.size() <= 120
+        && data.subject is string && data.subject.size() <= 150
+        && data.message is string && data.message.size() <= 3000
+        && data.createdAt is timestamp;
+    }
+
+    function isValidAdmin(data) {
+      return data.keys().hasAll(['email', 'role'])
+        && data.keys().size() >= 2 && data.keys().size() <= 4
+        && data.email is string && data.email.size() <= 120
+        && data.role == 'Admin';
+    }
+
+    function isValidTestimonial(data) {
+      return data.keys().hasAll(['name', 'rating', 'comment', 'courseTitle', 'createdAt'])
+        && data.keys().size() >= 5 && data.keys().size() <= 8
+        && data.name is string && data.name.size() <= 100
+        && (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 500))
+        && data.rating is number && data.rating >= 1 && data.rating <= 5
+        && data.comment is string && data.comment.size() <= 1000
+        && data.courseTitle is string && data.courseTitle.size() <= 150
+        && (!('occupation' in data) || (data.occupation is string && data.occupation.size() <= 100))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidReview(data) {
+      return data.keys().hasAll(['reviewId', 'userId', 'userEmail', 'userName', 'courseId', 'courseName', 'category', 'rating', 'reviewText', 'verifiedPurchase', 'orderId', 'createdAt', 'updatedAt', 'status'])
+        && data.keys().size() >= 14 && data.keys().size() <= 16
+        && data.reviewId is string && data.reviewId.size() <= 128
+        && data.userId is string && data.userId.size() <= 128
+        && data.userEmail is string && data.userEmail.size() <= 150
+        && data.userName is string && data.userName.size() <= 150
+        && (!('userPhoto' in data) || data.userPhoto is string || data.userPhoto == null)
+        && data.courseId is string && data.courseId.size() <= 128
+        && data.courseName is string && data.courseName.size() <= 200
+        && data.category is string && data.category.size() <= 100
+        && data.rating is number && data.rating >= 1 && data.rating <= 5
+        && data.reviewText is string && data.reviewText.size() <= 2000
+        && data.verifiedPurchase == true
+        && data.orderId is string && data.orderId.size() <= 128
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.status in ['Approved', 'Pending', 'Rejected'];
+    }
+
+    function isValidSettings(data) {
+      return data.keys().size() <= 10
+        && (!('metaPixelId' in data) || data.metaPixelId is string)
+        && (!('gtmId' in data) || data.gtmId is string)
+        && (!('ga4Id' in data) || data.ga4Id is string)
+        && (!('searchConsoleVerification' in data) || data.searchConsoleVerification is string)
+        && (!('facebookDomainVerification' in data) || data.facebookDomainVerification is string);
+    }
+
+    function isValidGlobalSettings(data) {
+      return data.keys().size() <= 20
+        && data.upiId is string && data.upiId.size() <= 150
+        && data.upiAccountName is string && data.upiAccountName.size() <= 150
+        && (!('upiQrCode' in data) || (data.upiQrCode is string && data.upiQrCode.size() <= 2100000))
+        && (!('paymentInstructions' in data) || (data.paymentInstructions is string && data.paymentInstructions.size() <= 5000))
+        && (!('telegramChannelLink' in data) || (data.telegramChannelLink is string && data.telegramChannelLink.size() <= 1000))
+        && (!('telegramSupportLink' in data) || (data.telegramSupportLink is string && data.telegramSupportLink.size() <= 1000))
+        && (!('telegramUsername' in data) || (data.telegramUsername is string && data.telegramUsername.size() <= 100))
+        && (!('instagramLink' in data) || (data.instagramLink is string && data.instagramLink.size() <= 1000))
+        && (!('youtubeLink' in data) || (data.youtubeLink is string && data.youtubeLink.size() <= 1000))
+        && data.supportEmail is string && data.supportEmail.size() <= 150
+        && (!('brandLogoUrl' in data) || (data.brandLogoUrl is string && data.brandLogoUrl.size() <= 2100000))
+        && (!('ogDefaultImageUrl' in data) || (data.ogDefaultImageUrl is string && data.ogDefaultImageUrl.size() <= 2100000))
+        && (!('twitterPreviewImageUrl' in data) || (data.twitterPreviewImageUrl is string && data.twitterPreviewImageUrl.size() <= 2100000))
+        && (!('defaultCardTitle' in data) || (data.defaultCardTitle is string && data.defaultCardTitle.size() <= 500))
+        && (!('defaultCardDescription' in data) || (data.defaultCardDescription is string && data.defaultCardDescription.size() <= 2000));
+    }
+
+    function isValidHomepageSettings(data) {
+      return data.keys().size() <= 55
+        && (!('enableOrbitAnimation' in data) || data.enableOrbitAnimation is bool)
+        && (!('enableOrbitGlow' in data) || data.enableOrbitGlow is bool)
+        && (!('enableParticleBackground' in data) || data.enableParticleBackground is bool)
+        && (!('enableParallax' in data) || data.enableParallax is bool)
+        && (!('enableHoverEffects' in data) || data.enableHoverEffects is bool)
+        && (!('enableAutoRotation' in data) || data.enableAutoRotation is bool)
+        && (!('orbitSpeed' in data) || data.orbitSpeed is string)
+        && (!('customOrbitSpeed' in data) || data.customOrbitSpeed is number)
+        && (!('centerLogoType' in data) || data.centerLogoType is string)
+        && (!('centerLogoUrl' in data) || data.centerLogoUrl is string)
+        && (!('mainHeading' in data) || data.mainHeading is string)
+        && (!('subHeading' in data) || data.subHeading is string)
+        && (!('ctaButtonText' in data) || data.ctaButtonText is string)
+        && (!('ctaButtonLink' in data) || data.ctaButtonLink is string)
+        && (!('animationsEnabled' in data) || data.animationsEnabled is bool)
+        && (!('animationIntensity' in data) || data.animationIntensity is string)
+        && (!('pageTransitionsEnabled' in data) || data.pageTransitionsEnabled is bool)
+        && (!('counterAnimationsEnabled' in data) || data.counterAnimationsEnabled is bool)
+        && (!('backgroundEffectsEnabled' in data) || data.backgroundEffectsEnabled is bool)
+        && (!('customCursorEnabled' in data) || data.customCursorEnabled is bool);
+    }
+
+    function isValidHeroOrbitItem(data) {
+      return data.keys().hasAll(['title', 'image', 'link', 'description', 'displayOrder', 'ringAssignment', 'enabled'])
+        && data.keys().size() >= 7 && data.keys().size() <= 15
+        && data.title is string && data.title.size() <= 200
+        && data.image is string && data.image.size() <= 2100000
+        && data.link is string && data.link.size() <= 1000
+        && data.description is string && data.description.size() <= 2000
+        && data.displayOrder is number
+        && (data.ringAssignment is string || data.ringAssignment is number)
+        && data.enabled is bool
+        && (!('imageSourceType' in data) || data.imageSourceType is string)
+        && (!('courseId' in data) || data.courseId is string)
+        && (!('clickActionType' in data) || data.clickActionType is string)
+        && (!('targetSlug' in data) || data.targetSlug is string)
+        && (!('createdAt' in data) || data.createdAt is timestamp || data.createdAt is string);
+    }
+
+    function isValidBlog(data) {
+      return data.keys().hasAll(['title', 'slug', 'metaTitle', 'metaDescription', 'featuredImage', 'category', 'content', 'author', 'publishDate', 'createdAt'])
+        && data.keys().size() >= 10 && data.keys().size() <= 13
+        && data.title is string && data.title.size() <= 200
+        && data.slug is string && data.slug.size() <= 200
+        && data.metaTitle is string && data.metaTitle.size() <= 200
+        && data.metaDescription is string && data.metaDescription.size() <= 3000
+        && data.featuredImage is string && data.featuredImage.size() <= 2000000
+        && data.category is string && data.category.size() <= 200
+        && data.content is string && data.content.size() <= 3000000
+        && data.author is string && data.author.size() <= 100
+        && data.publishDate is string && data.publishDate.size() <= 30
+        && (!('seoKeywords' in data) || (data.seoKeywords is string && data.seoKeywords.size() <= 1000))
+        && (!('canonicalUrl' in data) || (data.canonicalUrl is string && data.canonicalUrl.size() <= 1000))
+        && (!('contentUrl' in data) || (data.contentUrl is string && data.contentUrl.size() <= 1000))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidBlogUpdate(data) {
+      return data.keys().hasAll(['title', 'slug', 'metaTitle', 'metaDescription', 'featuredImage', 'category', 'content', 'author', 'publishDate'])
+        && data.keys().size() >= 9 && data.keys().size() <= 13
+        && data.title is string && data.title.size() <= 200
+        && data.slug is string && data.slug.size() <= 200
+        && data.metaTitle is string && data.metaTitle.size() <= 200
+        && data.metaDescription is string && data.metaDescription.size() <= 3000
+        && data.featuredImage is string && data.featuredImage.size() <= 2000000
+        && data.category is string && data.category.size() <= 200
+        && data.content is string && data.content.size() <= 3000000
+        && data.author is string && data.author.size() <= 100
+        && data.publishDate is string && data.publishDate.size() <= 30
+        && (!('seoKeywords' in data) || (data.seoKeywords is string && data.seoKeywords.size() <= 1000))
+        && (!('canonicalUrl' in data) || (data.canonicalUrl is string && data.canonicalUrl.size() <= 1000))
+        && (!('contentUrl' in data) || (data.contentUrl is string && data.contentUrl.size() <= 1000))
+        && (!('createdAt' in data) || data.createdAt is timestamp);
+    }
+
+
+    function isValidAffiliateApplication(data) {
+      return data.keys().hasAll(['uid', 'fullName', 'email', 'mobile', 'preferredCoupon', 'question', 'status'])
+        && data.uid is string && data.uid.size() <= 128
+        && data.fullName is string && data.fullName.size() <= 150
+        && data.email is string && data.email.size() <= 150
+        && data.mobile is string && data.mobile.size() <= 60
+        && data.preferredCoupon is string && data.preferredCoupon.size() <= 60
+        && data.question is string && data.question.size() <= 5000
+        && data.status in ['pending', 'approved', 'rejected', 'suspended'];
+    }
+
+    function isValidPayoutRequest(data) {
+      return data.keys().hasAll(['id', 'uid', 'name', 'email', 'phone', 'couponCode', 'commissionPercent', 'amount', 'status', 'paymentDetails'])
+        && data.id is string && data.id.size() <= 128
+        && data.uid is string && data.uid.size() <= 128
+        && data.name is string && data.name.size() <= 150
+        && data.email is string && data.email.size() <= 150
+        && data.phone is string && data.phone.size() <= 60
+        && data.couponCode is string && data.couponCode.size() <= 60
+        && data.commissionPercent is number
+        && data.amount is number
+        && data.status in ['Pending', 'Approved', 'Rejected']
+        && data.paymentDetails is string && data.paymentDetails.size() <= 1000;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'fullName', 'email', 'onboardingCompleted', 'createdAt', 'updatedAt'])
+        && data.uid is string && data.uid.size() <= 128
+        && data.fullName is string && data.fullName.size() <= 150
+        && data.email is string && data.email.size() <= 150
+        && data.onboardingCompleted is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserSetting(data) {
+      return data.keys().hasAll(['uid', 'updatedAt'])
+        && data.uid is string && data.uid.size() <= 128
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'updatedAt'])
+        && data.uid is string && data.uid.size() <= 128
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidActivityLog(data) {
+      return data.keys().hasAll(['userId', 'userName', 'userEmail', 'action', 'details', 'timestamp'])
+        && data.keys().size() >= 6 && data.keys().size() <= 8
+        && data.userId is string && data.userId.size() <= 128
+        && data.userName is string && data.userName.size() <= 150
+        && data.userEmail is string && data.userEmail.size() <= 150
+        && data.action is string && data.action.size() <= 100
+        && data.details is string && data.details.size() <= 1000
+        && data.timestamp is timestamp;
+    }
+
+    function isValidCourseShare(data) {
+      return data.keys().hasAll(['courseId', 'courseName', 'userId', 'platform', 'shareUrl', 'createdAt'])
+        && data.keys().size() == 6
+        && data.courseId is string && data.courseId.size() <= 128
+        && data.courseName is string && data.courseName.size() <= 200
+        && data.userId is string && data.userId.size() <= 128
+        && data.platform is string && data.platform.size() <= 50
+        && data.shareUrl is string && data.shareUrl.size() <= 2083
+        && data.createdAt is timestamp;
+    }
+
+    function isValidCourseReferral(data) {
+      return data.keys().hasAll(['courseId', 'courseName', 'referrerId', 'clickedUserId', 'createdAt'])
+        && data.keys().size() == 5
+        && data.courseId is string && data.courseId.size() <= 128
+        && data.courseName is string && data.courseName.size() <= 200
+        && data.referrerId is string && data.referrerId.size() <= 128
+        && data.clickedUserId is string && data.clickedUserId.size() <= 128
+        && data.createdAt is timestamp;
+    }
+
+    function isValidStudentPortfolio(data) {
+      return (!('fullName' in data) || (data.fullName is string && data.fullName.size() <= 150))
+        && (!('username' in data) || (data.username is string && data.username.size() <= 150))
+        && (!('bio' in data) || (data.bio is string && data.bio.size() <= 3000))
+        && (!('location' in data) || (data.location is string && data.location.size() <= 150))
+        && (!('occupation' in data) || (data.occupation is string && data.occupation.size() <= 150))
+        && (!('skills' in data) || (data.skills is list && (data.skills.size() == 0 || data.skills[0] is string) && data.skills.size() <= 50))
+        && (!('learningGoals' in data) || (data.learningGoals is string && data.learningGoals.size() <= 3000))
+        && (!('currentProfession' in data) || (data.currentProfession is string && data.currentProfession.size() <= 150))
+        && (!('blogStatus' in data) || (data.blogStatus is string && data.blogStatus.size() <= 50))
+        && (!('updatedAt' in data) || (data.updatedAt is string || data.updatedAt is timestamp))
+        && (!('websiteUrl' in data) || (data.websiteUrl is string && data.websiteUrl.size() <= 300))
+        && (!('youtubeUrl' in data) || (data.youtubeUrl is string && data.youtubeUrl.size() <= 300))
+        && (!('instagramUrl' in data) || (data.instagramUrl is string && data.instagramUrl.size() <= 300))
+        && (!('facebookUrl' in data) || (data.facebookUrl is string && data.facebookUrl.size() <= 300))
+        && (!('linkedinUrl' in data) || (data.linkedinUrl is string && data.linkedinUrl.size() <= 300))
+        && (!('telegramUsername' in data) || (data.telegramUsername is string && data.telegramUsername.size() <= 150))
+        && (!('coursesPurchased' in data) || (data.coursesPurchased is list && (data.coursesPurchased.size() == 0 || data.coursesPurchased[0] is string) && data.coursesPurchased.size() <= 50))
+        && (!('coursesCompleted' in data) || (data.coursesCompleted is list && (data.coursesCompleted.size() == 0 || data.coursesCompleted[0] is string) && data.coursesCompleted.size() <= 50))
+        && (!('achievements' in data) || (data.achievements is string && data.achievements.size() <= 3000))
+        && (!('userSuccessStory' in data) || (data.userSuccessStory is string && data.userSuccessStory.size() <= 30000))
+        && (!('futureGoals' in data) || (data.futureGoals is string && data.futureGoals.size() <= 3000))
+        && (!('favoriteLearningTopics' in data) || (data.favoriteLearningTopics is list && (data.favoriteLearningTopics.size() == 0 || data.favoriteLearningTopics[0] is string) && data.favoriteLearningTopics.size() <= 50))
+        && (!('profilePhoto' in data) || (data.profilePhoto is string && data.profilePhoto.size() <= 2100000))
+        && (!('aiBlogTitle' in data) || (data.aiBlogTitle is string && data.aiBlogTitle.size() <= 300))
+        && (!('aiBlogContent' in data) || (data.aiBlogContent is string && data.aiBlogContent.size() <= 50000))
+        && (!('metaDescription' in data) || (data.metaDescription is string && data.metaDescription.size() <= 1000))
+        && (!('seoKeywords' in data) || (data.seoKeywords is string && data.seoKeywords.size() <= 1000))
+        && (!('aiBlogFeaturedImage' in data) || (data.aiBlogFeaturedImage is string && data.aiBlogFeaturedImage.size() <= 2100000));
+    }
+
+    function isValidCheer(data) {
+      return data.keys().hasAll(['name', 'rating', 'message', 'createdAt'])
+        && data.keys().size() == 4
+        && data.name is string && data.name.size() <= 100
+        && data.rating is number && data.rating >= 1 && data.rating <= 5
+        && data.message is string && data.message.size() <= 2000
+        && (data.createdAt is timestamp || data.createdAt is string);
+    }
+
+
+    // --- COLLECTION PATH MATCH BLOCKS ---
+
+    // 1. Courses Collection
+    match /courses/{courseId} {
+      allow read: if true; // Public access for reading course catalog
+      
+      allow create: if isAdmin() && isValidId(courseId) && isValidCourse(incoming()) && incoming().createdAt == request.time;
+      allow update: if isAdmin() && isValidId(courseId) && isValidCourseUpdate(incoming());
+      allow delete: if isAdmin() && isValidId(courseId);
+    }
+
+    // 2. Orders Collection
+    match /orders/{orderId} {
+      // Users can only read their own orders; Admin can read all
+      allow get: if isSignedIn() && (('email' in existing() && request.auth.token.email != null && existing().email == request.auth.token.email) || isAdmin());
+      allow list: if isSignedIn() && (('email' in resource.data && request.auth.token.email != null && resource.data.email == request.auth.token.email) || isAdmin());
+
+      // Only signed-in users can create. Status must start as "Pending", "Verified", "pending", or "verified" and createdAt must be a valid timestamp
+      allow create: if isSignedIn() 
+        && isValidId(orderId) 
+        && isValidOrder(incoming()) 
+        && incoming().status in ['Pending', 'Verified', 'pending', 'verified'] 
+        && (incoming().userId == request.auth.uid)
+        && (incoming().createdAt == request.time || incoming().createdAt is timestamp);
+
+      // Admin can update any field; Student can only update access telemetry
+      allow update: if (isAdmin() && isValidId(orderId))
+        || (isSignedIn() 
+        && (('email' in existing() && request.auth.token.email != null && existing().email == request.auth.token.email) || (existing().userId == request.auth.uid))
+        && isValidId(orderId)
+        && (incoming().diff(existing()).affectedKeys().hasOnly(['accessCount', 'lastAccessTime'])));
+
+      allow delete: if isAdmin() && isValidId(orderId);
+    }
+
+    // 3. Contact Messages Collection
+    match /contactMessages/{messageId} {
+      allow get, list: if isAdmin();
+      
+      // Anyone can submit a contact message. Timestamp must match server time
+      allow create: if isValidId(messageId) 
+        && isValidContactMessage(incoming()) 
+        && incoming().createdAt == request.time;
+
+      allow update: if isAdmin() && isValidId(messageId) && isValidContactMessage(incoming());
+      allow delete: if isAdmin() && isValidId(messageId);
+    }
+
+    // 4. Admins Collection
+    match /admins/{adminUid} {
+      allow read: if isSignedIn(); // Logged-in users can read admin records to assert their panel privilege
+      allow create, update, delete: if isAdmin() && isValidId(adminUid) && isValidAdmin(incoming());
+    }
+
+    // 5. Testimonials Collection
+    match /testimonials/{testimonialId} {
+      allow read: if true; // Public access for displaying dynamic testimonials
+      
+      // Signed-in users can leave a recommendation. Timestamp matches server time.
+      allow create: if (isSignedIn() && isValidId(testimonialId) && isValidTestimonial(incoming()) && incoming().createdAt == request.time)
+        || (isAdmin() && isValidId(testimonialId) && isValidTestimonial(incoming()));
+      allow update: if isAdmin() && isValidId(testimonialId) && isValidTestimonial(incoming());
+      allow delete: if isAdmin() && isValidId(testimonialId);
+    }
+
+    // 5.5 Reviews Collection (Verified student ratings per category)
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow list: if resource.data.status == 'Approved' || (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+      
+      allow create: if isSignedIn()
+        && isValidId(reviewId)
+        && isValidReview(incoming())
+        && incoming().userId == request.auth.uid
+        && incoming().userEmail == request.auth.token.email
+        && incoming().status in ['Approved', 'Pending']
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if (isSignedIn() && existing().userId == request.auth.uid && isValidId(reviewId) && isValidReview(incoming()) && incoming().updatedAt == request.time && incoming().userId == existing().userId && incoming().category == existing().category && (incoming().diff(existing()).affectedKeys().hasOnly(['rating', 'reviewText', 'updatedAt'])))
+        || (isAdmin() && isValidId(reviewId) && isValidReview(incoming()) && incoming().updatedAt == request.time);
+
+      allow delete: if (isSignedIn() && existing().userId == request.auth.uid) || isAdmin();
+    }
+
+    // 6. Settings Collection
+    match /settings/{documentId} {
+      allow read: if true; // Public access to load analytics/tracking scripts on startup
+      allow create, update: if isAdmin() && isValidId(documentId) && (
+        (documentId == 'tracking' && isValidSettings(incoming())) ||
+        (documentId == 'globalSettings' && isValidGlobalSettings(incoming())) ||
+        (documentId == 'homepageSettings' && isValidHomepageSettings(incoming())) ||
+        (documentId == 'portfolio_promotions')
+      );
+      allow delete: if isAdmin() && isValidId(documentId);
+    }
+
+    // 18. Student Portfolios Collection
+    match /student_portfolios/{uid} {
+      allow read: if true; // Public access to student portfolio pages
+      allow create: if isSignedIn() && (request.auth.uid == uid || isAdmin()) && isValidId(uid) && isValidStudentPortfolio(incoming());
+      allow update: if (isSignedIn() && request.auth.uid == uid && isValidId(uid) && isValidStudentPortfolio(incoming()))
+        || (isAdmin() && isValidId(uid) && isValidStudentPortfolio(incoming()));
+      allow delete: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+    }
+
+    // Reciprocated cheerleader posts per student showcase
+    match /student_portfolios/{uid}/cheers/{cheerId} {
+      allow read: if true; // Public list of cheers and encouragement
+      allow create: if isSignedIn() && isValidId(cheerId) && isValidCheer(incoming()) && (incoming().createdAt == request.time || incoming().createdAt is string);
+      allow update, delete: if isAdmin() && isValidId(cheerId);
+    }
+
+    // 7. Blogs Collection
+    match /blogs/{blogId} {
+      allow read: if true; // Public catalog access for list and detail loading
+      allow create: if isAdmin() && isValidId(blogId) && isValidBlog(incoming()) && incoming().createdAt == request.time;
+      allow update: if isAdmin() && isValidId(blogId) && isValidBlogUpdate(incoming()) && (!('createdAt' in incoming()) || incoming().createdAt == existing().createdAt);
+      allow delete: if isAdmin() && isValidId(blogId);
+    }
+
+    // 8. Coupons Collection
+    match /coupons/{code} {
+      allow get: if true; // Public check for individual coupon validation at checkout
+      allow list: if isAdmin(); // Only administrators can list promo codes
+      
+      allow create: if isAdmin() && isValidId(code) && isValidCoupon(incoming()) && incoming().createdAt == request.time;
+      allow update: if isAdmin() && isValidId(code) && isValidCoupon(incoming());
+      allow delete: if isAdmin() && isValidId(code);
+    }
+
+    // 9. Admin Users Collection (Dynamic Admin Access Allocation)
+    match /adminUsers/{emailId} {
+      allow get: if isSignedIn() && request.auth.token.email != null && (
+        request.auth.token.email == "digitalcoursesbay@gmail.com" ||
+        request.auth.token.email == emailId ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+      
+      allow list: if isSignedIn() && request.auth.token.email != null && (
+        request.auth.token.email == "digitalcoursesbay@gmail.com" ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        exists(/databases/$(database)/documents/adminUsers/$(request.auth.token.email))
+      );
+      
+      allow create: if isSignedIn() && request.auth.token.email != null && (
+        request.auth.token.email == "digitalcoursesbay@gmail.com" ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        exists(/databases/$(database)/documents/adminUsers/$(request.auth.token.email))
+      ) && emailId is string && emailId.size() <= 150 && isValidAdminUser(incoming());
+      
+      allow delete: if isSignedIn() && request.auth.token.email != null && (
+        request.auth.token.email == "digitalcoursesbay@gmail.com" ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        exists(/databases/$(database)/documents/adminUsers/$(request.auth.token.email))
+      ) && emailId is string && emailId.size() <= 150 && emailId != "digitalcoursesbay@gmail.com";
+    }
+
+    // 10. Users Collection
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isSignedIn() && isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidId(userId) && isValidUser(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && (
+        (request.auth.uid == userId && isValidUser(incoming()) && incoming().updatedAt == request.time && (
+          !('disabled' in incoming()) || 
+          (('disabled' in existing()) && incoming().disabled == existing().disabled) ||
+          (!('disabled' in existing()) && incoming().disabled == false)
+        )) || 
+        isAdmin()
+      );
+      allow delete: if isSignedIn() && isAdmin();
+    }
+
+    // 11. User Settings Collection
+    match /userSettings/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isSignedIn() && isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidId(userId) && isValidUserSetting(incoming()) && incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && (
+        (request.auth.uid == userId && isValidUserSetting(incoming()) && incoming().updatedAt == request.time) || 
+        isAdmin()
+      );
+      allow delete: if isSignedIn() && isAdmin();
+    }
+
+    // 12. User Profiles Collection
+    match /userProfiles/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isSignedIn() && isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidId(userId) && isValidUserProfile(incoming()) && incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && (
+        (request.auth.uid == userId && isValidUserProfile(incoming()) && incoming().updatedAt == request.time) || 
+        isAdmin()
+      );
+      allow delete: if isSignedIn() && isAdmin();
+    }
+
+    // 13. Activity Logs Collection
+    match /activityLogs/{logId} {
+      allow get: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidId(logId) && isValidActivityLog(incoming()) && incoming().userId == request.auth.uid && incoming().userEmail == request.auth.token.email && incoming().timestamp == request.time;
+      allow update, delete: if isAdmin() && isValidId(logId);
+    }
+
+    // 14. Cart Items Collection
+    match /cartItems/{cartItemId} {
+      allow read, delete: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid || isAdmin());
+      allow create, update: if isSignedIn() && (request.resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // 15. User purchases Collection
+    match /userPurchases/{purchaseId} {
+      allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.userId == request.auth.uid || isAdmin());
+      allow update, delete: if isAdmin();
+    }
+
+    // 16. Course Shares Collection
+    match /courseShares/{shareId} {
+      allow create: if isValidId(shareId) && isValidCourseShare(incoming()) && incoming().createdAt == request.time;
+      allow read: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    // 17. Course Referrals Collection
+    match /courseReferrals/{refId} {
+      allow create: if isValidId(refId) && isValidCourseReferral(incoming()) && incoming().createdAt == request.time;
+      allow read: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    // 19. Hero Orbit Items Collection
+    match /heroOrbitItems/{itemId} {
+      allow read: if true; // Public views of dynamic orbit items placement
+      allow create: if isAdmin() && isValidId(itemId) && isValidHeroOrbitItem(incoming()) && (incoming().createdAt == request.time || !('createdAt' in incoming()));
+      allow update: if isAdmin() && isValidId(itemId) && isValidHeroOrbitItem(incoming());
+      allow delete: if isAdmin() && isValidId(itemId);
+    }
+
+    // 20. Affiliate Applications Collection
+    match /affiliate_applications/{uid} {
+      allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      
+      allow create: if isSignedIn() && request.auth.uid == uid && isValidId(uid) && isValidAffiliateApplication(incoming()) && incoming().uid == request.auth.uid && incoming().email == request.auth.token.email && incoming().status == 'pending';
+      allow update: if (isSignedIn() && request.auth.uid == uid && isValidId(uid) && isValidAffiliateApplication(incoming()) && incoming().uid == request.auth.uid && (incoming().diff(existing()).affectedKeys().hasOnly(['address', 'city', 'state', 'country', 'instagramUrl', 'youtubeUrl', 'facebookUrl', 'linkedinUrl', 'twitterUrl', 'telegramUsername', 'websiteUrl', 'upiId', 'bankAccount', 'ifsc', 'beneficiaryName', 'pendingEarnings']))) || isAdmin();
+      allow delete: if (isSignedIn() && request.auth.uid == uid) || isAdmin();
+    }
+
+    // 21. Payout Requests Collection
+    match /payout_requests/{payoutId} {
+      allow get: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      
+      allow create: if isSignedIn() && isValidId(payoutId) && isValidPayoutRequest(incoming()) && incoming().uid == request.auth.uid && incoming().email == request.auth.token.email && incoming().status == 'Pending';
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // 22. Affiliate Sales Collection
+    match /affiliate_sales/{saleId} {
+      allow get, list: if isSignedIn() && (resource.data.affiliateUid == request.auth.uid || isAdmin());
+      allow create, update, delete: if isAdmin();
+    }
+  }
+}
