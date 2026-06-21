@@ -242,6 +242,10 @@ export const AdminDashboard: React.FC = () => {
   const [contactMsgs, setContactMsgs] = useState<ContactMessage[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Payment Logs & Recovery Queue States
+  const [paymentLogsList, setPaymentLogsList] = useState<any[]>([]);
+  const [paymentRecoveryQueueList, setPaymentRecoveryQueueList] = useState<any[]>([]);
+
   // Admin Affiliate CRM state variables
   const [affiliateLists, setAffiliateLists] = useState<any[]>([]);
   const [loadingAffiliates, setLoadingAffiliates] = useState(true);
@@ -363,6 +367,7 @@ export const AdminDashboard: React.FC = () => {
   const [razorpayWebhookSecret, setRazorpayWebhookSecret] = useState("");
   const [isTestMode, setIsTestMode] = useState(true);
   const [isLiveMode, setIsLiveMode] = useState(false);
+  const [enablePaymentSandbox, setEnablePaymentSandbox] = useState(true);
   const [savingPaymentSettings, setSavingPaymentSettings] = useState(false);
 
   // Global Business Settings Form State
@@ -1610,28 +1615,39 @@ export const AdminDashboard: React.FC = () => {
     try {
       // 4b. Fetch Razorpay Payment Gateway settings from Firestore
       const paymentSnap = await getDoc(doc(db, "settings", "paymentGateway"));
+      
+      const normalizeLocalKey = (key: string) => {
+        const trimmed = (key || "").trim();
+        if (trimmed.startsWith("zp_test_")) return "rzp_test_" + trimmed.substring(8);
+        if (trimmed.startsWith("zp_live_")) return "rzp_live_" + trimmed.substring(8);
+        return trimmed;
+      };
+
       if (paymentSnap.exists()) {
         const data = paymentSnap.data();
-        setRazorpayKeyId(data.razorpayKeyId || "");
+        setRazorpayKeyId(normalizeLocalKey(data.razorpayKeyId || ""));
         setRazorpayKeySecret(data.razorpayKeySecret || "");
         setRazorpayWebhookSecret(data.razorpayWebhookSecret || "");
         setIsTestMode(data.isTestMode !== false);
         setIsLiveMode(!!data.isLiveMode);
+        setEnablePaymentSandbox(data.enablePaymentSandbox !== false);
       } else {
         const stored = localStorage.getItem("demo_payment_settings");
         if (stored) {
           const data = JSON.parse(stored);
-          setRazorpayKeyId(data.razorpayKeyId || "");
+          setRazorpayKeyId(normalizeLocalKey(data.razorpayKeyId || ""));
           setRazorpayKeySecret(data.razorpayKeySecret || "");
           setRazorpayWebhookSecret(data.razorpayWebhookSecret || "");
           setIsTestMode(data.isTestMode !== false);
           setIsLiveMode(!!data.isLiveMode);
+          setEnablePaymentSandbox(data.enablePaymentSandbox !== false);
         } else {
           setRazorpayKeyId("");
           setRazorpayKeySecret("");
           setRazorpayWebhookSecret("");
           setIsTestMode(true);
           setIsLiveMode(false);
+          setEnablePaymentSandbox(true);
         }
       }
     } catch (e) {
@@ -1849,6 +1865,28 @@ export const AdminDashboard: React.FC = () => {
       setLoadingPayoutRequests(false);
     });
 
+    const paymentLogsQ = query(collection(db, "paymentLogs"), orderBy("timestamp", "desc"));
+    const unsubscribePaymentLogs = onSnapshot(paymentLogsQ, (snap) => {
+      const logs: any[] = [];
+      snap.forEach((docSnap) => {
+        logs.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setPaymentLogsList(logs);
+    }, (err) => {
+      console.warn("[ADMIN-SUBSCRIBE] Payment logs subscribe failed:", err);
+    });
+
+    const paymentRecoveryQ = query(collection(db, "paymentRecoveryQueue"), orderBy("createdAt", "desc"));
+    const unsubscribePaymentRecovery = onSnapshot(paymentRecoveryQ, (snap) => {
+      const queueList: any[] = [];
+      snap.forEach((docSnap) => {
+        queueList.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setPaymentRecoveryQueueList(queueList);
+    }, (err) => {
+      console.warn("[ADMIN-SUBSCRIBE] Payment recovery queue subscribe failed:", err);
+    });
+
     return () => {
       unsubscribeOrders();
       unsubscribeCourses();
@@ -1864,6 +1902,8 @@ export const AdminDashboard: React.FC = () => {
       unsubscribeHeroOrbitItems();
       unsubscribeAffiliates();
       unsubscribePayouts();
+      unsubscribePaymentLogs();
+      unsubscribePaymentRecovery();
     };
   }, [isAdmin, user?.uid]);
 
@@ -3446,12 +3486,22 @@ export const AdminDashboard: React.FC = () => {
     }
 
     setSavingPaymentSettings(true);
+    let normalizedKey = razorpayKeyId.trim();
+    if (normalizedKey.startsWith("zp_test_")) {
+      normalizedKey = "rzp_test_" + normalizedKey.substring(8);
+      setRazorpayKeyId(normalizedKey);
+    } else if (normalizedKey.startsWith("zp_live_")) {
+      normalizedKey = "rzp_live_" + normalizedKey.substring(8);
+      setRazorpayKeyId(normalizedKey);
+    }
+
     const updatedPaymentSettings = {
-      razorpayKeyId: razorpayKeyId.trim(),
+      razorpayKeyId: normalizedKey,
       razorpayKeySecret: razorpayKeySecret.trim(),
       razorpayWebhookSecret: razorpayWebhookSecret.trim(),
       isTestMode: !!isTestMode,
-      isLiveMode: !!isLiveMode
+      isLiveMode: !!isLiveMode,
+      enablePaymentSandbox: !!enablePaymentSandbox
     };
 
     if (user?.uid === "demo_admin_uid") {
@@ -5037,6 +5087,241 @@ export const AdminDashboard: React.FC = () => {
                   )}
                 </div>
 
+                {/* PAYMENT SAFETY, AUDITING & BACKEND RECOVERY CENTER */}
+                {(() => {
+                  const revByDayDict: { [key: string]: number } = {};
+                  const revByMonthDict: { [key: string]: number } = {};
+
+                  orders.forEach((o) => {
+                    const status = o.status?.toLowerCase() || "";
+                    if (["verified", "approved", "delivered", "success"].includes(status)) {
+                      const price = Number(o.amount || o.price || 0);
+                      
+                      let dateObj: Date | null = null;
+                      if (o.createdAt) {
+                        if ((o.createdAt as any).seconds) {
+                          dateObj = new Date((o.createdAt as any).seconds * 1000);
+                        } else if (typeof o.createdAt === "string" || o.createdAt instanceof Date) {
+                          dateObj = new Date(o.createdAt);
+                        }
+                      } else if (o.date) {
+                        if ((o.date as any).seconds) {
+                          dateObj = new Date((o.date as any).seconds * 1000);
+                        } else if (typeof o.date === "string" || o.date instanceof Date) {
+                          dateObj = new Date(o.date);
+                        }
+                      }
+
+                      if (dateObj && !isNaN(dateObj.getTime())) {
+                        const dayStr = dateObj.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+                        const monthStr = dateObj.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+                        revByDayDict[dayStr] = (revByDayDict[dayStr] || 0) + price;
+                        revByMonthDict[monthStr] = (revByMonthDict[monthStr] || 0) + price;
+                      }
+                    }
+                  });
+
+                  const revByDayList = Object.entries(revByDayDict)
+                    .map(([day, val]) => ({ day, val }))
+                    .slice(-5);
+                  
+                  const revByMonthList = Object.entries(revByMonthDict)
+                    .map(([month, val]) => ({ month, val }));
+
+                  const successRzpLogs = paymentLogsList.filter(
+                    (l) => l.status === "Verified Success" || l.status === "Verified" || l.status?.toLowerCase().includes("success")
+                  ).length;
+                  const failedRzpLogs = paymentLogsList.filter(
+                    (l) => l.status === "Failed" || l.status?.toLowerCase().includes("fail") || l.error
+                  ).length;
+                  const totalRzpLogs = successRzpLogs + failedRzpLogs;
+                  const razorpaySuccessRate = totalRzpLogs > 0 ? Math.round((successRzpLogs / totalRzpLogs) * 100) : 100;
+
+                  return (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8" id="admin-payment-security-ledger">
+                      
+                      {/* Left Column (2-Span): Chronological Database Sales Audit Logs & Financial Trends */}
+                      <div className="lg:col-span-2 p-6 md:p-8 border border-neutral-200 dark:border-brand-border bg-white dark:bg-[#121212] rounded-3xl space-y-6 shadow-xl text-left">
+                        <div className="flex justify-between items-center pb-2 border-b border-neutral-150 dark:border-neutral-900">
+                          <div>
+                            <span className="text-[9px] font-mono font-bold text-emerald-500 uppercase tracking-widest block">Security ledger</span>
+                            <h3 className="font-display text-base font-bold text-neutral-900 dark:text-white flex items-center gap-1.5">
+                              Chronological Sales & Audits Grid <ShieldCheck className="w-4 h-4 text-emerald-500 inline fill-emerald-500/10" />
+                            </h3>
+                          </div>
+                          <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-500 rounded-lg text-[10px] font-mono font-semibold">LIVE SYNCED</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* Revenue by Day */}
+                          <div className="bg-neutral-50 dark:bg-neutral-950 p-4 rounded-2xl border border-neutral-100 dark:border-neutral-900 space-y-3">
+                            <div className="flex justify-between items-center">
+                              <h4 className="text-[10px] font-black text-neutral-500 font-mono uppercase tracking-wider">🗓️ Net Sales By Day</h4>
+                              <span className="text-[9px] font-mono text-neutral-400">Last 5 Days</span>
+                            </div>
+                            <div className="divide-y divide-neutral-100 dark:divide-neutral-900">
+                              {revByDayList.length === 0 ? (
+                                <p className="text-[10px] text-neutral-500 font-mono py-2 text-center">No transactions registered yet.</p>
+                              ) : (
+                                revByDayList.map(({ day, val }) => (
+                                  <div key={day} className="flex justify-between items-center py-2 text-xs font-mono">
+                                    <span className="font-semibold text-neutral-600 dark:text-neutral-400">{day}</span>
+                                    <span className="font-extrabold text-brand-gold">₹{val.toLocaleString("en-IN")}</span>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Revenue by Month */}
+                          <div className="bg-neutral-50 dark:bg-neutral-950 p-4 rounded-2xl border border-neutral-100 dark:border-neutral-900 space-y-3">
+                            <div className="flex justify-between items-center">
+                              <h4 className="text-[10px] font-black text-neutral-500 font-mono uppercase tracking-wider">📊 Net Sales By Month</h4>
+                              <span className="text-[9px] font-mono text-neutral-400">History</span>
+                            </div>
+                            <div className="divide-y divide-neutral-100 dark:divide-neutral-900">
+                              {revByMonthList.length === 0 ? (
+                                <p className="text-[10px] text-neutral-500 font-mono py-2 text-center">No transactions registered yet.</p>
+                              ) : (
+                                revByMonthList.map(({ month, val }) => (
+                                  <div key={month} className="flex justify-between items-center py-2 text-xs font-mono">
+                                    <span className="font-semibold text-neutral-600 dark:text-neutral-400">{month}</span>
+                                    <span className="font-extrabold text-[#F5B300]">₹{val.toLocaleString("en-IN")}</span>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3 mt-4">
+                          <h4 className="text-[10px] font-black text-neutral-500 font-mono uppercase tracking-wider">📑 Razorpay Logging & Failures Console</h4>
+                          <div className="max-h-[190px] overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-900 border border-neutral-150 dark:border-neutral-900 bg-black/5 dark:bg-black/30 rounded-2xl p-3 scrollable-element">
+                            {paymentLogsList.length === 0 ? (
+                              <p className="text-[11px] text-neutral-500 font-mono py-6 text-center">Awaiting logging signals... No Razorpay platform actions observed.</p>
+                            ) : (
+                              paymentLogsList.slice(0, 15).map((pl) => (
+                                <div key={pl.id} className="py-2.5 flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1.5 text-[10px] font-mono">
+                                  <div className="space-y-0.5 text-left">
+                                    <p className="font-extrabold text-neutral-800 dark:text-neutral-200">
+                                      Payment: <span className="select-all text-neutral-500 font-normal">{pl.paymentId}</span>
+                                    </p>
+                                    <p className="text-neutral-500 text-[9px]">
+                                      User ID: <span className="select-all text-neutral-400">{pl.userId}</span> | Order: <span className="select-all text-neutral-400">{pl.orderId}</span>
+                                    </p>
+                                    {pl.error && <p className="text-red-400 font-medium text-[9px]">Tracepoint: {pl.error}</p>}
+                                  </div>
+                                  <div className="sm:text-right shrink-0">
+                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${
+                                      pl.status === "Verified Success" || pl.status?.toLowerCase().includes("success")
+                                        ? "bg-green-550/15 text-green-500"
+                                        : "bg-red-500/10 text-red-400"
+                                    }`}>
+                                      {pl.status}
+                                    </span>
+                                    <span className="block text-neutral-500 text-[8px] mt-1">
+                                      {pl.timestamp ? new Date(pl.timestamp).toLocaleTimeString("en-IN") : "N/A"}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right Column: Background Payment Recovery Hub & Live Status */}
+                      <div className="p-6 md:p-8 border border-neutral-200 dark:border-brand-border bg-white dark:bg-[#121212] rounded-3xl space-y-6 shadow-xl text-left flex flex-col justify-between">
+                        <div className="space-y-4">
+                          <div className="pb-2 border-b border-neutral-100 dark:border-neutral-900">
+                            <span className="text-[9px] font-mono font-bold text-blue-500 uppercase tracking-widest block">Background Workers</span>
+                            <h3 className="font-display text-base font-bold text-neutral-900 dark:text-white">Payment Recovery Hub</h3>
+                          </div>
+
+                          <div className="p-4 bg-black/5 dark:bg-black/30 rounded-2xl border border-neutral-100 dark:border-neutral-900 flex justify-between items-center font-mono">
+                            <div>
+                              <span className="text-[9px] text-neutral-500 uppercase block font-bold">GATEWAY INTEGRITY RATE</span>
+                              <span className="text-2xl font-black text-brand-gold">{razorpaySuccessRate}%</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[8.5px] block text-neutral-400">SUCCESS: <strong className="text-green-500 font-extrabold">{successRzpLogs}</strong></span>
+                              <span className="text-[8.5px] block text-neutral-400">FAILS: <strong className="text-red-500 font-extrabold">{failedRzpLogs}</strong></span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center text-[10px] font-mono">
+                              <span className="text-zinc-500 uppercase font-bold">Recovery Queue:</span>
+                              <span className="font-bold text-zinc-400">
+                                {paymentRecoveryQueueList.filter(qi => qi.status === "Pending").length} Pending / {paymentRecoveryQueueList.filter(qi => qi.status === "Resolved").length} Resolved
+                              </span>
+                            </div>
+
+                            <div className="max-h-[160px] overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-900 border border-neutral-150 dark:border-neutral-900 rounded-xl p-2.5 bg-neutral-50 dark:bg-black/20 text-[10px] font-mono scrollable-element">
+                              {paymentRecoveryQueueList.length === 0 ? (
+                                <p className="text-[10px] text-zinc-500 text-center py-8">Recovery channel is transparent. No fallbacks queued.</p>
+                              ) : (
+                                paymentRecoveryQueueList.map(item => (
+                                  <div key={item.id} className="py-2 flex flex-col gap-1">
+                                    <div className="flex justify-between items-start">
+                                      <div>
+                                        <p className="font-bold text-neutral-850 dark:text-stone-300 truncate max-w-[130px]">{item.productTitle}</p>
+                                        <p className="text-[8.5px] text-zinc-500">Student: <span className="select-all text-neutral-400">{item.userId}</span></p>
+                                      </div>
+                                      <span className={`px-1.5 py-0.5 rounded text-[8px] font-extrabold ${
+                                        item.status === "Resolved" ? "bg-green-550/15 text-green-550" : "bg-red-500/10 text-red-400 animate-pulse"
+                                      }`}>
+                                        {item.status}
+                                      </span>
+                                    </div>
+                                    {item.error && <p className="text-[8.5px] text-red-400 leading-tight">Error: {item.error}</p>}
+                                    <p className="text-[8.5px] text-zinc-500">Retries: {item.retryCount || 0} | Attempted: {item.lastAttempt ? new Date(item.lastAttempt).toLocaleTimeString("en-IN") : "Never"}</p>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-neutral-150 dark:border-neutral-900 space-y-2.5 text-left">
+                          <p className="text-[9px] font-mono text-neutral-400/80 leading-relaxed">
+                            * The platform runs a background retry loop every 10 minutes to process failures. You can manually force run the worker below.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const btn = document.getElementById("manual-retry-button") as HTMLButtonElement;
+                                if (btn) btn.disabled = true;
+                                showToast("Initiating manual transaction recovery retry loop on server...");
+                                
+                                const resp = await fetch("/api/pay/trigger-recovery-retry", { method: "POST" });
+                                if (resp.ok) {
+                                  const result = await resp.json();
+                                  showToast("SUCCESS: Recovery loop execution completed! Double check student profiles.");
+                                } else {
+                                  showToast("ERROR: Manual retry run failed on server.");
+                                }
+                              } catch (err) {
+                                showToast("ERROR: Exception connecting to manual retry endpoint.");
+                              } finally {
+                                const btn = document.getElementById("manual-retry-button") as HTMLButtonElement;
+                                if (btn) btn.disabled = false;
+                              }
+                            }}
+                            id="manual-retry-button"
+                            className="w-full bg-brand-gold hover:bg-[#ffd34d] text-black font-sans font-extrabold text-[10px] uppercase tracking-widest py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow active:scale-95 cursor-pointer disabled:opacity-50"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5 text-black" />
+                            <span>Force Run Recovery Retry Engine</span>
+                          </button>
+                        </div>
+                      </div>
+
+                    </div>
+                  );
+                })()}
+
                 {/* Unified Recent Event Stream Activity Logger */}
                 <div className="p-6 md:p-8 border border-neutral-200 dark:border-brand-border bg-white dark:bg-[#121212] rounded-3xl space-y-6 shadow-xl">
                   <div className="space-y-1">
@@ -5832,6 +6117,23 @@ export const AdminDashboard: React.FC = () => {
                     <span className="text-[10px] text-neutral-400 block pt-1 leading-relaxed">
                       💡 Ensure Key Secret corresponds to the exact environment toggled above (Test vs Live).
                     </span>
+
+                    {user?.email?.toLowerCase() === "digitalcoursesbay@gmail.com" && (
+                      <div className="pt-3 border-t border-neutral-100 dark:border-[#222] space-y-1">
+                        <label className="flex items-center space-x-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={enablePaymentSandbox}
+                            onChange={(e) => setEnablePaymentSandbox(e.target.checked)}
+                            className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                          />
+                          <div>
+                            <span className="text-xs font-bold text-amber-600 dark:text-amber-400 block font-display">Enable Payment Sandbox (Super Admin Override)</span>
+                            <span className="text-[10px] text-neutral-500 block">Allow checkout simulations for quick sandbox debugging. Stripped automatically in PRODUCTION.</span>
+                          </div>
+                        </label>
+                      </div>
+                    )}
                   </div>
 
                 </div>

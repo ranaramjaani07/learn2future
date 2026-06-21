@@ -661,6 +661,55 @@
         "commission": { "type": "number" }
       },
       "required": ["id", "affiliateUid", "buyerName", "amount", "commission"]
+    },
+    "paymentLog": {
+      "title": "Payment Log",
+      "description": "Log of a payment attempt",
+      "type": "object",
+      "properties": {
+        "paymentId": { "type": "string" },
+        "orderId": { "type": "string" },
+        "userId": { "type": "string" },
+        "courseIds": { "type": "array" },
+        "timestamp": { "type": "string" },
+        "status": { "type": "string" },
+        "error": { "type": "string" },
+        "backendSecret": { "type": "string" }
+      }
+    },
+    "paymentRecovery": {
+      "title": "Payment Recovery Request",
+      "description": "Information about a queued enrollment retry",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "productId": { "type": "string" },
+        "productTitle": { "type": "string" },
+        "productImage": { "type": "string" },
+        "orderId": { "type": "string" },
+        "error": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "status": { "type": "string" },
+        "retryCount": { "type": "number" },
+        "lastAttempt": { "type": "string" },
+        "backendSecret": { "type": "string" }
+      }
+    },
+    "userPurchase": {
+      "title": "User Purchase Record",
+      "description": "A student's course enrollment purchase access ledger",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "productId": { "type": "string" },
+        "productTitle": { "type": "string" },
+        "productImage": { "type": "string" },
+        "purchaseDate": { "type": "string" },
+        "deliveryUrl": { "type": "string" },
+        "orderId": { "type": "string" },
+        "status": { "type": "string" },
+        "backendSecret": { "type": "string" }
+      }
     }
   },
   "firestore": {
@@ -751,6 +800,18 @@
     "/affiliate_sales/{saleId}": {
       "schema": "affiliateSale",
       "description": "Individual recorded course sales allocated to affiliate tutors"
+    },
+    "/paymentLogs/{logId}": {
+      "schema": "paymentLog",
+      "description": "Protected payment audit logs"
+    },
+    "/paymentRecoveryQueue/{recoveryId}": {
+      "schema": "paymentRecovery",
+      "description": "Automatic course delivery recovery tasks queue"
+    },
+    "/userPurchases/{purchaseId}": {
+      "schema": "userPurchase",
+      "description": "Successful purchase course enrollments index record"
     }
   }
 }

@@ -6,7 +6,7 @@ import jsonConfig from "../../firebase-applet-config.json";
 import { initFirestoreIfNeeded } from "./firestore-init";
 
 // Merge JSON layout with standard VITE_ environment variables to support flexible external cloud builds
-const metaEnv = (import.meta as any).env || {};
+const metaEnv = typeof import.meta !== "undefined" && (import.meta as any).env ? (import.meta as any).env : {};
 const firebaseConfig = {
   apiKey: (metaEnv.VITE_FIREBASE_API_KEY as string) || jsonConfig?.apiKey,
   authDomain: (metaEnv.VITE_FIREBASE_AUTH_DOMAIN as string) || jsonConfig?.authDomain,

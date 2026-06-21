@@ -19,10 +19,13 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && (
-        (request.auth.token.email != null && request.auth.token.email == "digitalcoursesbay@gmail.com") || 
+        (request.auth.token.email != null && (request.auth.token.email.lower() == "digitalcoursesbay@gmail.com" || request.auth.token.email == "digitalcoursesbay@gmail.com")) || 
         request.auth.uid == "7FLbcBGlHAPKxnFc8V0ypY3DPKq2" ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        (request.auth.token.email != null && exists(/databases/$(database)/documents/adminUsers/$(request.auth.token.email)))
+        (request.auth.token.email != null && (
+          exists(/databases/$(database)/documents/adminUsers/$(request.auth.token.email.lower())) ||
+          exists(/databases/$(database)/documents/adminUsers/$(request.auth.token.email))
+        ))
       );
     }
 
@@ -477,6 +480,10 @@ service cloud.firestore {
       allow delete: if (isSignedIn() && existing().userId == request.auth.uid) || isAdmin();
     }
 
+    function isValidPaymentGateway(data) {
+      return data.keys().size() <= 10;
+    }
+
     // 6. Settings Collection
     match /settings/{documentId} {
       allow read: if true; // Public access to load analytics/tracking scripts on startup
@@ -484,6 +491,7 @@ service cloud.firestore {
         (documentId == 'tracking' && isValidSettings(incoming())) ||
         (documentId == 'globalSettings' && isValidGlobalSettings(incoming())) ||
         (documentId == 'homepageSettings' && isValidHomepageSettings(incoming())) ||
+        (documentId == 'paymentGateway' && isValidPaymentGateway(incoming())) ||
         (documentId == 'portfolio_promotions')
       );
       allow delete: if isAdmin() && isValidId(documentId);
@@ -526,28 +534,31 @@ service cloud.firestore {
     // 9. Admin Users Collection (Dynamic Admin Access Allocation)
     match /adminUsers/{emailId} {
       allow get: if isSignedIn() && request.auth.token.email != null && (
-        request.auth.token.email == "digitalcoursesbay@gmail.com" ||
-        request.auth.token.email == emailId ||
+        request.auth.token.email.lower() == "digitalcoursesbay@gmail.com" ||
+        request.auth.token.email.lower() == emailId.lower() ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
       
       allow list: if isSignedIn() && request.auth.token.email != null && (
-        request.auth.token.email == "digitalcoursesbay@gmail.com" ||
+        request.auth.token.email.lower() == "digitalcoursesbay@gmail.com" ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        exists(/databases/$(database)/documents/adminUsers/$(request.auth.token.email.lower())) ||
         exists(/databases/$(database)/documents/adminUsers/$(request.auth.token.email))
       );
       
       allow create: if isSignedIn() && request.auth.token.email != null && (
-        request.auth.token.email == "digitalcoursesbay@gmail.com" ||
+        request.auth.token.email.lower() == "digitalcoursesbay@gmail.com" ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        exists(/databases/$(database)/documents/adminUsers/$(request.auth.token.email.lower())) ||
         exists(/databases/$(database)/documents/adminUsers/$(request.auth.token.email))
       ) && emailId is string && emailId.size() <= 150 && isValidAdminUser(incoming());
       
       allow delete: if isSignedIn() && request.auth.token.email != null && (
-        request.auth.token.email == "digitalcoursesbay@gmail.com" ||
+        request.auth.token.email.lower() == "digitalcoursesbay@gmail.com" ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        exists(/databases/$(database)/documents/adminUsers/$(request.auth.token.email.lower())) ||
         exists(/databases/$(database)/documents/adminUsers/$(request.auth.token.email))
-      ) && emailId is string && emailId.size() <= 150 && emailId != "digitalcoursesbay@gmail.com";
+      ) && emailId is string && emailId.size() <= 150 && emailId.lower() != "digitalcoursesbay@gmail.com";
     }
 
     // 10. Users Collection
