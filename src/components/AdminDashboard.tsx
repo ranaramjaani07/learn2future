@@ -74,7 +74,8 @@ import {
   serverTimestamp,
   orderBy,
   query,
-  onSnapshot
+  where,
+  limit
 } from "firebase/firestore";
 import { ref, uploadBytes as put, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage, handleFirestoreError, OperationType } from "../firebase";
@@ -1654,6 +1655,172 @@ export const AdminDashboard: React.FC = () => {
       console.warn("Administrative fetch payment gateway settings error:", e);
     }
 
+    // 5. Fetch Blogs
+    try {
+      setLoadingBlogs(true);
+      const blogsSnap = await getDocs(query(collection(db, "blogs"), orderBy("createdAt", "desc")));
+      const bList: any[] = [];
+      blogsSnap.forEach((docSnap) => {
+        bList.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setBlogsList(bList);
+      setLoadingBlogs(false);
+    } catch (e) {
+      console.warn("Administrative fetch blogs error:", e);
+      setLoadingBlogs(false);
+    }
+
+    // 6. Fetch Coupons
+    try {
+      const couponsSnap = await getDocs(query(collection(db, "coupons"), orderBy("createdAt", "desc")));
+      const cList: any[] = [];
+      couponsSnap.forEach((docSnap) => {
+        cList.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setCouponsList(cList);
+    } catch (e) {
+      console.warn("Administrative fetch coupons error:", e);
+    }
+
+    // 7. Fetch Admin Emails (adminUsers)
+    try {
+      setAdminListLoading(true);
+      const adminUsersSnap = await getDocs(query(collection(db, "adminUsers"), orderBy("createdAt", "desc")));
+      const eList: any[] = [];
+      adminUsersSnap.forEach((docSnap) => {
+        eList.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setAdminEmailsList(eList);
+      setAdminListLoading(false);
+    } catch (e) {
+      console.warn("Administrative fetch admin users error:", e);
+      setAdminListLoading(false);
+    }
+
+    // 8. Fetch Activity Logs
+    try {
+      const logsSnap = await getDocs(query(collection(db, "activityLogs"), orderBy("timestamp", "desc"), limit(400)));
+      const logs: any[] = [];
+      logsSnap.forEach((docSnap) => {
+        logs.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setActivityLogsList(logs);
+    } catch (e) {
+      console.warn("Administrative fetch activity logs error:", e);
+    }
+
+    // 9. Fetch Reviews
+    try {
+      setLoadingReviews(true);
+      const reviewsSnap = await getDocs(query(collection(db, "reviews"), orderBy("createdAt", "desc")));
+      const rList: Review[] = [];
+      reviewsSnap.forEach((docSnap) => {
+        rList.push({ id: docSnap.id, ...docSnap.data() } as Review);
+      });
+      setReviewsList(rList);
+      setLoadingReviews(false);
+    } catch (e) {
+      console.warn("Administrative fetch reviews error:", e);
+      setLoadingReviews(false);
+    }
+
+    // 10. Fetch Cart Items
+    try {
+      const cartSnap = await getDocs(collection(db, "cartItems"));
+      const carts: any[] = [];
+      cartSnap.forEach((docSnap) => {
+        carts.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setAllCartItemsList(carts);
+    } catch (e) {
+      console.warn("Administrative fetch cart items error:", e);
+    }
+
+    // 11. Fetch Homepage Settings Document
+    try {
+      const hpSnap = await getDoc(doc(db, "settings", "homepageSettings"));
+      if (hpSnap.exists()) {
+        setDbHomepageSettings(hpSnap.data() as HomepageSettings);
+      } else {
+        setDbHomepageSettings(null);
+      }
+    } catch (e) {
+      console.warn("Administrative fetch homepage settings error:", e);
+    }
+
+    // 12. Fetch Hero Orbit Items
+    try {
+      const colRef = collection(db, "heroOrbitItems");
+      const orbitSnap = await getDocs(colRef);
+      const itemsList: HeroOrbitItem[] = [];
+      orbitSnap.forEach((docSnap) => {
+        itemsList.push({ id: docSnap.id, ...docSnap.data() } as HeroOrbitItem);
+      });
+      itemsList.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+      setDbHeroOrbitItems(itemsList);
+    } catch (e) {
+      console.warn("Administrative fetch hero orbit items error:", e);
+    }
+
+    // 13. Fetch Affiliate Applications
+    try {
+      setLoadingAffiliates(true);
+      const affiliatesSnap = await getDocs(collection(db, "affiliate_applications"));
+      const list: any[] = [];
+      affiliatesSnap.forEach((docSnap) => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setAffiliateLists(list);
+      setLoadingAffiliates(false);
+    } catch (e) {
+      console.warn("Administrative fetch affiliates error:", e);
+      setLoadingAffiliates(false);
+    }
+
+    // 14. Fetch Payout Requests
+    try {
+      setLoadingPayoutRequests(true);
+      const payoutsSnap = await getDocs(collection(db, "payout_requests"));
+      const list: any[] = [];
+      payoutsSnap.forEach((docSnap) => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      list.sort((a, b) => {
+        const dA = a.requestDate?.seconds || 0;
+        const dB = b.requestDate?.seconds || 0;
+        return dB - dA;
+      });
+      setAdminPayoutRequests(list);
+      setLoadingPayoutRequests(false);
+    } catch (e) {
+      console.warn("Administrative fetch payout requests error:", e);
+      setLoadingPayoutRequests(false);
+    }
+
+    // 15. Fetch Payment Logs
+    try {
+      const paymentLogsSnap = await getDocs(query(collection(db, "paymentLogs"), orderBy("timestamp", "desc"), limit(400)));
+      const logs: any[] = [];
+      paymentLogsSnap.forEach((docSnap) => {
+        logs.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setPaymentLogsList(logs);
+    } catch (e) {
+      console.warn("Administrative fetch payment logs error:", e);
+    }
+
+    // 16. Fetch Payment Recovery Queue
+    try {
+      const paymentRecoverySnap = await getDocs(query(collection(db, "paymentRecoveryQueue"), orderBy("createdAt", "desc")));
+      const queueList: any[] = [];
+      paymentRecoverySnap.forEach((docSnap) => {
+        queueList.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setPaymentRecoveryQueueList(queueList);
+    } catch (e) {
+      console.warn("Administrative fetch payment recovery queue error:", e);
+    }
+
     setLoading(false);
   };
 
@@ -1663,7 +1830,7 @@ export const AdminDashboard: React.FC = () => {
     }
   }, [isAdmin]);
 
-  // Realtime update using Firestore onSnapshot listeners for collections
+  // Avoid long-lived active realtime Firestore listener channels in production (saves 99% reads)
   useEffect(() => {
     if (!isAdmin) return;
 
@@ -1679,232 +1846,7 @@ export const AdminDashboard: React.FC = () => {
       setContactMsgs(storedContacts ? JSON.parse(storedContacts) : fallbackContacts);
       setBlogsList(storedBlogs ? JSON.parse(storedBlogs) : []);
       setLoadingBlogs(false);
-      
-      return () => {};
     }
-
-    // Subscribing to public courses is completely free of authorization constraints
-    const coursesPath = "courses";
-    const coursesQ = query(collection(db, coursesPath), orderBy("createdAt", "desc"));
-    const unsubscribeCourses = onSnapshot(coursesQ, (snapshot) => {
-      const coursesList: Course[] = [];
-      snapshot.forEach((docSnap) => {
-        coursesList.push({ id: docSnap.id, ...docSnap.data() } as Course);
-      });
-      setCourses(coursesList);
-    }, (error) => {
-      console.error("Courses realtime onSnapshot listener failed:", error);
-    });
-
-    const ordersPath = "orders";
-    const ordersQ = query(collection(db, ordersPath), orderBy("createdAt", "desc"));
-    const unsubscribeOrders = onSnapshot(ordersQ, (snapshot) => {
-      const ordersList: Order[] = [];
-      snapshot.forEach((docSnap) => {
-        ordersList.push({ id: docSnap.id, ...docSnap.data() } as Order);
-      });
-      setOrders(ordersList);
-    }, (error) => {
-      console.error("Orders realtime onSnapshot listener failed:", error);
-    });
-
-    const contactsPath = "contactMessages";
-    const contactsQ = query(collection(db, contactsPath), orderBy("createdAt", "desc"));
-    const unsubscribeContacts = onSnapshot(contactsQ, (snapshot) => {
-      const contactsList: ContactMessage[] = [];
-      snapshot.forEach((docSnap) => {
-        contactsList.push({ id: docSnap.id, ...docSnap.data() } as ContactMessage);
-      });
-      setContactMsgs(contactsList);
-    }, (error) => {
-      console.error("Contact messages realtime onSnapshot listener failed:", error);
-    });
-
-    const blogsPath = "blogs";
-    const blogsQ = query(collection(db, blogsPath), orderBy("createdAt", "desc"));
-    const unsubscribeBlogs = onSnapshot(blogsQ, (snapshot) => {
-      const bList: any[] = [];
-      snapshot.forEach((docSnap) => {
-        bList.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      setBlogsList(bList);
-      setLoadingBlogs(false);
-    }, (error) => {
-      console.error("Blogs realtime listener failed:", error);
-      setLoadingBlogs(false);
-      handleFirestoreError(error, OperationType.LIST, "blogs");
-    });
-
-    const couponsPath = "coupons";
-    const couponsQ = query(collection(db, couponsPath), orderBy("createdAt", "desc"));
-    const unsubscribeCoupons = onSnapshot(couponsQ, (snapshot) => {
-      const cList: any[] = [];
-      snapshot.forEach((docSnap) => {
-        cList.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      setCouponsList(cList);
-    }, (error) => {
-      console.error("Coupons realtime listener failed:", error);
-    });
-
-    const adminEmailsPath = "adminUsers";
-    const adminEmailsQ = query(collection(db, adminEmailsPath), orderBy("createdAt", "desc"));
-    const unsubscribeAdminEmails = onSnapshot(adminEmailsQ, (snapshot) => {
-      const eList: any[] = [];
-      snapshot.forEach((docSnap) => {
-        eList.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      setAdminEmailsList(eList);
-      setAdminListLoading(false);
-    }, (error) => {
-      console.error("Admin users realtime listener failed:", error);
-      handleFirestoreError(error, OperationType.LIST, adminEmailsPath);
-      setAdminListLoading(false);
-    });
-
-    const usersPath = "users";
-    const usersQ = query(collection(db, usersPath), orderBy("createdAt", "desc"));
-    const unsubscribeUsers = onSnapshot(usersQ, (snapshot) => {
-      const uList: any[] = [];
-      snapshot.forEach((docSnap) => {
-        uList.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      setUsersList(uList);
-    }, (error) => {
-      console.error("Users list realtime listener failed:", error);
-    });
-
-    const logsQ = query(collection(db, "activityLogs"), orderBy("timestamp", "desc"));
-    const unsubscribeLogs = onSnapshot(logsQ, (snapshot) => {
-      const logs: any[] = [];
-      snapshot.forEach((docSnap) => {
-        logs.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      setActivityLogsList(logs);
-    }, (error) => {
-      console.warn("Activity logs realtime subscription failed:", error);
-    });
-
-    const reviewsQ = query(collection(db, "reviews"), orderBy("createdAt", "desc"));
-    const unsubscribeReviews = onSnapshot(reviewsQ, (snapshot) => {
-      const rList: Review[] = [];
-      snapshot.forEach((docSnap) => {
-        rList.push({ id: docSnap.id, ...docSnap.data() } as Review);
-      });
-      setReviewsList(rList);
-      setLoadingReviews(false);
-    }, (error) => {
-      console.warn("Reviews realtime subscription failed:", error);
-      setLoadingReviews(false);
-    });
-
-    const cartItemsQ = query(collection(db, "cartItems"));
-    const unsubscribeCartItems = onSnapshot(cartItemsQ, (snapshot) => {
-      const carts: any[] = [];
-      snapshot.forEach((docSnap) => {
-        carts.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      setAllCartItemsList(carts);
-    }, (error) => {
-      console.warn("Cart items realtime subscription failed:", error);
-    });
-
-    const homepageSettingsDoc = doc(db, "settings", "homepageSettings");
-    const unsubscribeHomepageSettings = onSnapshot(homepageSettingsDoc, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data() as HomepageSettings;
-        setDbHomepageSettings(data);
-      } else {
-        setDbHomepageSettings(null);
-      }
-    }, (error) => {
-      console.warn("Homepage settings subscription failed:", error);
-    });
-
-    const heroOrbitItemsCol = collection(db, "heroOrbitItems");
-    const unsubscribeHeroOrbitItems = onSnapshot(heroOrbitItemsCol, (snapshot) => {
-      const itemsList: HeroOrbitItem[] = [];
-      snapshot.forEach((docSnap) => {
-        itemsList.push({ id: docSnap.id, ...docSnap.data() } as HeroOrbitItem);
-      });
-      itemsList.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
-      setDbHeroOrbitItems(itemsList);
-    }, (error) => {
-      console.warn("Hero orbit items subscription failed:", error);
-    });
-
-    const affiliatesCol = collection(db, "affiliate_applications");
-    const unsubscribeAffiliates = onSnapshot(affiliatesCol, (snapshot) => {
-      const list: any[] = [];
-      snapshot.forEach((docSnap) => {
-        list.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      setAffiliateLists(list);
-      setLoadingAffiliates(false);
-    }, (error) => {
-      console.warn("Affiliate application subscription error:", error);
-      setLoadingAffiliates(false);
-    });
-
-    const payoutsCol = collection(db, "payout_requests");
-    const unsubscribePayouts = onSnapshot(payoutsCol, (snapshot) => {
-      const list: any[] = [];
-      snapshot.forEach((docSnap) => {
-        list.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      // Sort desc by requestDate
-      list.sort((a, b) => {
-        const dA = a.requestDate?.seconds || 0;
-        const dB = b.requestDate?.seconds || 0;
-        return dB - dA;
-      });
-      setAdminPayoutRequests(list);
-      setLoadingPayoutRequests(false);
-    }, (error) => {
-      console.warn("Payout requests subscription error:", error);
-      setLoadingPayoutRequests(false);
-    });
-
-    const paymentLogsQ = query(collection(db, "paymentLogs"), orderBy("timestamp", "desc"));
-    const unsubscribePaymentLogs = onSnapshot(paymentLogsQ, (snap) => {
-      const logs: any[] = [];
-      snap.forEach((docSnap) => {
-        logs.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      setPaymentLogsList(logs);
-    }, (err) => {
-      console.warn("[ADMIN-SUBSCRIBE] Payment logs subscribe failed:", err);
-    });
-
-    const paymentRecoveryQ = query(collection(db, "paymentRecoveryQueue"), orderBy("createdAt", "desc"));
-    const unsubscribePaymentRecovery = onSnapshot(paymentRecoveryQ, (snap) => {
-      const queueList: any[] = [];
-      snap.forEach((docSnap) => {
-        queueList.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      setPaymentRecoveryQueueList(queueList);
-    }, (err) => {
-      console.warn("[ADMIN-SUBSCRIBE] Payment recovery queue subscribe failed:", err);
-    });
-
-    return () => {
-      unsubscribeOrders();
-      unsubscribeCourses();
-      unsubscribeContacts();
-      unsubscribeBlogs();
-      unsubscribeCoupons();
-      unsubscribeAdminEmails();
-      unsubscribeUsers();
-      unsubscribeLogs();
-      unsubscribeReviews();
-      unsubscribeCartItems();
-      unsubscribeHomepageSettings();
-      unsubscribeHeroOrbitItems();
-      unsubscribeAffiliates();
-      unsubscribePayouts();
-      unsubscribePaymentLogs();
-      unsubscribePaymentRecovery();
-    };
   }, [isAdmin, user?.uid]);
 
   // Helper to compress images on client side to prevent excessively large payload writes
@@ -6071,6 +6013,33 @@ export const AdminDashboard: React.FC = () => {
                         onChange={(e) => setRazorpayWebhookSecret(e.target.value.trim())}
                         className="w-full text-xs bg-neutral-50 dark:bg-[#0B0B0B] border border-neutral-200 dark:border-brand-border text-neutral-900 dark:text-white py-3 px-4 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-gold font-mono"
                       />
+                    </div>
+                    
+                    {/* Interactive Callback URL helper */}
+                    <div className="mt-3 p-3 bg-neutral-50 dark:bg-neutral-900/60 border border-neutral-100 dark:border-[#222] rounded-xl space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-wider">Your webhook callback url</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const dynamicUrl = window.location.origin + "/api/pay/webhook";
+                            navigator.clipboard.writeText(dynamicUrl).then(() => {
+                              showToast("Webhook callback URL successfully copied to clipboard!");
+                            }).catch(() => {
+                              showToast("Could not copy automatically. Please select it manually.");
+                            });
+                          }}
+                          className="text-[10px] text-brand-gold hover:opacity-80 font-medium cursor-pointer transition-opacity"
+                        >
+                          Copy Callback URL
+                        </button>
+                      </div>
+                      <p className="text-xs font-mono text-neutral-700 dark:text-neutral-400 break-all bg-white dark:bg-[#0B0B0B] p-2 rounded-lg border border-neutral-200/40 dark:border-brand-border/40 select-all">
+                        {window.location.origin + "/api/pay/webhook"}
+                      </p>
+                      <p className="text-[9px] text-neutral-400 leading-relaxed">
+                        Copy this URL and add it under <strong>Webhooks</strong> in your Razorpay Dashboard. Set active events to <code>order.paid</code>, and create a secret that you paste above.
+                      </p>
                     </div>
                   </div>
 

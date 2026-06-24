@@ -22,7 +22,7 @@ import {
   ShieldAlert
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { collection, getDocs, limit, query, orderBy, addDoc, serverTimestamp, onSnapshot, where, doc, deleteDoc, updateDoc, setDoc } from "firebase/firestore";
+import { collection, getDocs, getDoc, limit, query, orderBy, addDoc, serverTimestamp, where, doc, deleteDoc, updateDoc, setDoc } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { Course, Review } from "../types";
 
@@ -50,38 +50,63 @@ export const Home: React.FC = () => {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [cursorVisible, setCursorVisible] = useState(false);
 
-  // Realtime subscriber for dynamic homepage parameters
+  // ── FIXED: One-time getDocs with cache instead of persistent onSnapshot listeners ──
   useEffect(() => {
-    const hpDocRef = doc(db, "settings", "homepageSettings");
-    const unsubscribeHp = onSnapshot(hpDocRef, (snap) => {
-      if (snap.exists()) {
-        setHpSettings(snap.data());
-      } else {
-        setHpSettings(null);
-      }
-    }, (err) => {
-      console.warn("Home dynamic settings load failed:", err);
-    });
+    let cancelled = false;
+    const HP_CACHE_KEY = "hp_settings_cache";
+    const ORBIT_CACHE_KEY = "orbit_items_cache";
+    const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
-    const colRef = collection(db, "heroOrbitItems");
-    const unsubscribeOrbit = onSnapshot(colRef, (snap) => {
-      const items: any[] = [];
-      snap.forEach((docSnap) => {
-        const d = docSnap.data();
-        if (d.enabled !== false) {
-          items.push({ id: docSnap.id, ...d });
+    async function fetchHomeData() {
+      const now = Date.now();
+
+      // Load from cache first for instant render
+      try {
+        const hpStored = localStorage.getItem(HP_CACHE_KEY);
+        if (hpStored) {
+          const { ts, data } = JSON.parse(hpStored);
+          if (now - ts < CACHE_TTL && !cancelled) setHpSettings(data);
         }
-      });
-      items.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
-      setOrbitItems(items);
-    }, (err) => {
-      console.warn("Home orbit collection load failed:", err);
-    });
+        const orbitStored = localStorage.getItem(ORBIT_CACHE_KEY);
+        if (orbitStored) {
+          const { ts, data } = JSON.parse(orbitStored);
+          if (now - ts < CACHE_TTL && !cancelled) setOrbitItems(data);
+          if (now - ts < CACHE_TTL) return; // Cache fresh, skip Firestore
+        }
+      } catch (_) {}
 
-    return () => {
-      unsubscribeHp();
-      unsubscribeOrbit();
-    };
+      // Fetch from Firestore
+      try {
+        const [hpSnap, orbitSnap] = await Promise.all([
+          getDoc(doc(db, "settings", "homepageSettings")),
+          getDocs(collection(db, "heroOrbitItems")),
+        ]);
+
+        if (cancelled) return;
+
+        if (hpSnap.exists()) {
+          const data = hpSnap.data();
+          setHpSettings(data);
+          localStorage.setItem(HP_CACHE_KEY, JSON.stringify({ ts: now, data }));
+        } else {
+          setHpSettings(null);
+        }
+
+        const items: any[] = [];
+        orbitSnap.forEach((docSnap) => {
+          const d = docSnap.data();
+          if (d.enabled !== false) items.push({ id: docSnap.id, ...d });
+        });
+        items.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+        setOrbitItems(items);
+        localStorage.setItem(ORBIT_CACHE_KEY, JSON.stringify({ ts: now, data: items }));
+      } catch (err) {
+        console.warn("[Home] Failed to fetch homepage data:", err);
+      }
+    }
+
+    fetchHomeData();
+    return () => { cancelled = true; };
   }, []);
 
   // Sync cursor followers dynamically
@@ -398,34 +423,51 @@ export const Home: React.FC = () => {
     fetchFeaturedCourses();
   }, []);
 
-  // Fetch Approved Reviews dynamically with real-time feedback stream
+  // ── FIXED: One-time getDocs with 15-min cache instead of persistent onSnapshot ──
   useEffect(() => {
-    setFetchingReviews(true);
-    const q = query(collection(db, "reviews"), where("status", "==", "Approved"), orderBy("createdAt", "desc"));
-    
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const docsList: Review[] = [];
-        snapshot.forEach((docSnap) => {
-          docsList.push({ id: docSnap.id, ...docSnap.data() } as Review);
-        });
+    let cancelled = false;
+    const REVIEWS_CACHE_KEY = "approved_reviews_cache";
+    const CACHE_TTL = 15 * 60 * 1000;
 
-        if (docsList.length > 0) {
-          setReviews(docsList);
-        } else {
+    async function fetchReviews() {
+      setFetchingReviews(true);
+
+      // Serve from localStorage cache first
+      try {
+        const stored = localStorage.getItem(REVIEWS_CACHE_KEY);
+        if (stored) {
+          const { ts, data } = JSON.parse(stored);
+          if (Date.now() - ts < CACHE_TTL) {
+            if (!cancelled) {
+              setReviews(data.length > 0 ? data : defaultReviews);
+              setFetchingReviews(false);
+            }
+            return;
+          }
+        }
+      } catch (_) {}
+
+      try {
+        const q = query(collection(db, "reviews"), where("status", "==", "Approved"), orderBy("createdAt", "desc"));
+        const snapshot = await getDocs(q);
+        if (cancelled) return;
+        const docsList: Review[] = [];
+        snapshot.forEach((docSnap) => docsList.push({ id: docSnap.id, ...docSnap.data() } as Review));
+        const result = docsList.length > 0 ? docsList : defaultReviews;
+        setReviews(result);
+        localStorage.setItem(REVIEWS_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: docsList }));
+      } catch (error) {
+        if (!cancelled) {
+          console.warn("[Home] Reviews fetch failed (safe fallback loaded):", error);
           setReviews(defaultReviews);
         }
-        setFetchingReviews(false);
-      },
-      (error) => {
-        console.warn("Could not query dynamic reviews stream (safe defaultReviews loaded):", error);
-        setReviews(defaultReviews);
-        setFetchingReviews(false);
+      } finally {
+        if (!cancelled) setFetchingReviews(false);
       }
-    );
+    }
 
-    return () => unsubscribe();
+    fetchReviews();
+    return () => { cancelled = true; };
   }, []);
 
   // Fetch logged-in user's eligibility criteria (their orders and written reviews)

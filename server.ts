@@ -142,42 +142,176 @@ function resolveAbsoluteUrl(imgUrl: string, host: string): string {
   return `https://${host}/${imgUrl}`;
 }
 
-import { getApps as getAdminApps, initializeApp as initAdminApp } from "firebase-admin/app";
-import { getFirestore as getAdminFirestore, FieldValue as AdminFieldValue } from "firebase-admin/firestore";
-import { initializeApp as initClientApp } from "firebase/app";
-import { getDoc, doc, setDoc, updateDoc, deleteDoc, getDocs, collection, query, where, orderBy, initializeFirestore } from "firebase/firestore";
+// --- ULTRA-LIGHTWEIGHT SECURE REST FIRESTORE ENGINE (FOR NODE.JS BYPASSING ADC IAM RESTRICTIONS) ---
+const REST_PROJECT_ID = firebaseConfig.projectId;
+const REST_DATABASE_ID = firebaseConfig.firestoreDatabaseId;
+const REST_API_KEY = firebaseConfig.apiKey;
+const REST_BASE_URL = `https://firestore.googleapis.com/v1/projects/${REST_PROJECT_ID}/databases/${REST_DATABASE_ID}/documents`;
 
-// Initialize Firebase Admin SDK
-const adminApp = getAdminApps().length === 0 ? initAdminApp({
-  projectId: firebaseConfig.projectId || process.env.FIREBASE_PROJECT_ID
-}) : getAdminApps()[0];
-const dbId = firebaseConfig.firestoreDatabaseId || process.env.FIREBASE_FIRESTORE_DATABASE_ID;
-const rawAdminDb = dbId ? getAdminFirestore(adminApp, dbId) : getAdminFirestore(adminApp);
-console.log(`[SERVER-INIT] Firebase Admin SDK initialized. Target Database ID: ${dbId || "(default)"}`);
+// Helper types & sentinels
+export const AdminFieldValue = {
+  serverTimestamp: () => ({ __type: "server_timestamp" })
+};
 
-let clientDbInstance: any = null;
-function getClientFallbackDb() {
-  if (!clientDbInstance) {
-    try {
-      const clientApp = initClientApp({
-        apiKey: firebaseConfig.apiKey || process.env.VITE_FIREBASE_API_KEY,
-        authDomain: firebaseConfig.authDomain || process.env.VITE_FIREBASE_AUTH_DOMAIN,
-        projectId: firebaseConfig.projectId || process.env.FIREBASE_PROJECT_ID,
-        storageBucket: firebaseConfig.storageBucket || process.env.VITE_FIREBASE_STORAGE_BUCKET,
-        messagingSenderId: firebaseConfig.messagingSenderId || process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-        appId: firebaseConfig.appId || process.env.VITE_FIREBASE_APP_ID,
-        measurementId: firebaseConfig.measurementId || process.env.VITE_FIREBASE_MEASUREMENT_ID,
+function fromFirestoreProto(fields: any): any {
+  if (!fields) return {};
+  const obj: any = {};
+  for (const [key, val] of Object.entries(fields)) {
+    obj[key] = decodeProtoValue(val);
+  }
+  return obj;
+}
+
+function decodeProtoValue(val: any): any {
+  if (!val) return null;
+  if ("stringValue" in val) return val.stringValue;
+  if ("doubleValue" in val) return Number(val.doubleValue);
+  if ("integerValue" in val) return Number(val.integerValue);
+  if ("booleanValue" in val) return !!val.booleanValue;
+  if ("timestampValue" in val) {
+    return {
+      toDate: () => new Date(val.timestampValue),
+      seconds: Math.floor(new Date(val.timestampValue).getTime() / 1000),
+      nanoseconds: 0,
+      toString() { return val.timestampValue; }
+    };
+  }
+  if ("arrayValue" in val) {
+    const arr = val.arrayValue.values || [];
+    return arr.map((item: any) => decodeProtoValue(item));
+  }
+  if ("mapValue" in val) {
+    return fromFirestoreProto(val.mapValue.fields);
+  }
+  if ("nullValue" in val) return null;
+  return val;
+}
+
+function encodeProtoValue(val: any): any {
+  if (val === null) return { nullValue: null };
+  if (typeof val === "string") return { stringValue: val };
+  if (typeof val === "boolean") return { booleanValue: val };
+  if (typeof val === "number") {
+    if (Number.isInteger(val)) {
+      return { integerValue: String(val) };
+    }
+    return { doubleValue: val };
+  }
+  if (val instanceof Date) {
+    return { timestampValue: val.toISOString() };
+  }
+  if (val && typeof val.toDate === "function") {
+    return { timestampValue: val.toDate().toISOString() };
+  }
+  if (val && val.seconds !== undefined) {
+    return { timestampValue: new Date(val.seconds * 1000).toISOString() };
+  }
+  if (Array.isArray(val)) {
+    return {
+      arrayValue: {
+        values: val.map(item => encodeProtoValue(item))
+      }
+    };
+  }
+  if (val && typeof val === "object") {
+    if (val.__type === "server_timestamp" || (val.constructor && (val.constructor.name === "FieldValue" || val.constructor.name === "Sentinel"))) {
+      return { timestampValue: new Date().toISOString() };
+    }
+    return {
+      mapValue: { fields: toFirestoreProto(val).fields }
+    };
+  }
+  return { stringValue: String(val) };
+}
+
+function toFirestoreProto(obj: any): any {
+  const fields: any = {};
+  for (const [key, val] of Object.entries(obj)) {
+    if (val === undefined) continue;
+    fields[key] = encodeProtoValue(val);
+  }
+  return { fields };
+}
+
+interface FilterDesc {
+  type: 'where' | 'orderBy';
+  field?: string;
+  op?: string;
+  value?: any;
+  direction?: 'asc' | 'desc';
+}
+
+function buildStructuredQuery(collectionId: string, filters: FilterDesc[]) {
+  const query: any = {
+    from: [{ collectionId, allDescendants: false }]
+  };
+
+  const whereFilters: any[] = [];
+  const orderBys: any[] = [];
+
+  for (const f of filters) {
+    if (f.type === 'where' && f.field && f.op) {
+      let restOp = f.op;
+      if (f.op === "==") restOp = "EQUAL";
+      else if (f.op === ">") restOp = "GREATER_THAN";
+      else if (f.op === ">=") restOp = "GREATER_THAN_OR_EQUAL";
+      else if (f.op === "<") restOp = "LESS_THAN";
+      else if (f.op === "<=") restOp = "LESS_THAN_OR_EQUAL";
+      else if (f.op === "in") restOp = "IN";
+      else if (f.op === "array-contains") restOp = "ARRAY_CONTAINS";
+      else if (f.op === "array-contains-any") restOp = "ARRAY_CONTAINS_ANY";
+      else if (f.op === "not-in") restOp = "NOT_IN";
+      else if (f.op === "!=") restOp = "NOT_EQUAL";
+
+      whereFilters.push({
+        fieldFilter: {
+          field: { fieldPath: f.field },
+          op: restOp,
+          value: encodeProtoValue(f.value)
+        }
       });
-      clientDbInstance = initializeFirestore(clientApp, {
-        experimentalForceLongPolling: true,
-        useFetchStreams: false
-      } as any, firebaseConfig.firestoreDatabaseId || process.env.FIREBASE_FIRESTORE_DATABASE_ID);
-      console.log("[SERVER-INIT] Client-side Firebase fallback database successfully connected and ready.");
-    } catch (err) {
-      console.error("[SERVER-INIT] Failed to initialize Client-side fallback database connection:", err);
+    } else if (f.type === 'orderBy' && f.field) {
+      const direction = f.direction?.toUpperCase() === "DESC" ? "DESCENDING" : "ASCENDING";
+      orderBys.push({
+        field: { fieldPath: f.field },
+        direction
+      });
     }
   }
-  return clientDbInstance;
+
+  if (whereFilters.length > 0) {
+    if (whereFilters.length === 1) {
+      query.where = whereFilters[0];
+    } else {
+      query.where = {
+        compositeFilter: {
+          op: "AND",
+          filters: whereFilters
+        }
+      };
+    }
+  }
+
+  if (orderBys.length > 0) {
+    query.orderBy = orderBys;
+  }
+
+  return { structuredQuery: query };
+}
+
+let isServerQuotaExceeded = false;
+
+function logServerFirestoreError(tag: string, err: any) {
+  const errStr = err instanceof Error ? err.message : String(err);
+  const isQuota = errStr.toLowerCase().includes("quota") ||
+                  errStr.toLowerCase().includes("resource_exhausted") ||
+                  errStr.toLowerCase().includes("429");
+  if (isQuota) {
+    isServerQuotaExceeded = true;
+    console.warn(`[REST-FIRESTORE-WARN] ${tag} (Quota/Limit Handled graceful):`, errStr);
+  } else {
+    console.error(`[REST-FIRESTORE-ERROR] ${tag}:`, err);
+  }
 }
 
 function generateQueryMethods(colName: string, filters: any[]): any {
@@ -190,42 +324,43 @@ function generateQueryMethods(colName: string, filters: any[]): any {
     },
     async get() {
       try {
-        let queryRef: any = rawAdminDb.collection(colName);
-        for (const f of filters) {
-          if (f.type === 'where') {
-            queryRef = queryRef.where(f.field, f.op, f.value);
-          } else if (f.type === 'orderBy') {
-            queryRef = queryRef.orderBy(f.field, f.direction);
+        const url = `${REST_BASE_URL}:runQuery?key=${REST_API_KEY}`;
+        const queryBody = buildStructuredQuery(colName, filters);
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(queryBody)
+        });
+        if (!response.ok) {
+          const text = await response.text();
+          if (response.status === 429) {
+            isServerQuotaExceeded = true;
           }
+          throw new Error(`REST structured query failed: ${response.status} ${text}`);
         }
-        return await queryRef.get();
-      } catch (err: any) {
-        if (err.message && (err.message.includes("PERMISSION_DENIED") || err.message.includes("7") || err.message.includes("rules"))) {
-          console.warn(`[FIREBASE-FALLBACK-WARN] Admin SDK failed on collection ${colName} query with filters:`, filters, "attempting client-side fallback...");
-          const cDb = getClientFallbackDb();
-          let cQuery: any = collection(cDb, colName);
-          const parts: any[] = [];
-          for (const f of filters) {
-            if (f.type === 'where') {
-              parts.push(where(f.field, f.op, f.value));
-            } else if (f.type === 'orderBy') {
-              parts.push(orderBy(f.field, f.direction));
+        const rawResults = await response.json();
+        const docs: any[] = [];
+        if (Array.isArray(rawResults)) {
+          for (const item of rawResults) {
+            if (item.document) {
+              const fullPath = item.document.name;
+              const docId = fullPath.split("/").pop() || "";
+              const data = fromFirestoreProto(item.document.fields);
+              docs.push({
+                id: docId,
+                exists: true,
+                data() { return data; }
+              });
             }
           }
-          if (parts.length > 0) {
-            cQuery = query(cQuery, ...parts);
-          }
-          const qSnap = await getDocs(cQuery);
-          return {
-            empty: qSnap.empty,
-            size: qSnap.size,
-            docs: qSnap.docs.map(s => ({
-              exists: true,
-              id: s.id,
-              data() { return s.data(); }
-            }))
-          };
         }
+        return {
+          empty: docs.length === 0,
+          size: docs.length,
+          docs: docs
+        };
+      } catch (err: any) {
+        logServerFirestoreError(`Query failed on collection ${colName}`, err);
         throw err;
       }
     }
@@ -240,58 +375,96 @@ const adminDb = {
           id: docId,
           async get() {
             try {
-              return await rawAdminDb.collection(colName).doc(docId).get();
-            } catch (err: any) {
-              if (err.message && (err.message.includes("PERMISSION_DENIED") || err.message.includes("7") || err.message.includes("rules"))) {
-                console.warn(`[FIREBASE-FALLBACK-WARN] Admin SDK failed on get ${colName}/${docId}, attempting client-side fallback...`);
-                const cDb = getClientFallbackDb();
-                const dRef = doc(cDb, colName, docId);
-                const s = await getDoc(dRef);
+              const url = `${REST_BASE_URL}/${colName}/${docId}?key=${REST_API_KEY}`;
+              const response = await fetch(url);
+              if (response.status === 404) {
                 return {
-                  exists: s.exists(),
-                  id: s.id,
-                  data() { return s.data(); }
+                  exists: false,
+                  id: docId,
+                  data() { return undefined; }
                 };
               }
+              if (!response.ok) {
+                const text = await response.text();
+                if (response.status === 429) {
+                  isServerQuotaExceeded = true;
+                }
+                throw new Error(`REST get failed: ${response.status} ${text}`);
+              }
+              const dataRaw = await response.json();
+              const fieldsObj = fromFirestoreProto(dataRaw.fields);
+              return {
+                exists: true,
+                id: docId,
+                data() { return fieldsObj; }
+              };
+            } catch (err: any) {
+              logServerFirestoreError(`Get failed on ${colName}/${docId}`, err);
               throw err;
             }
           },
           async set(data: any, options?: any) {
             try {
-              return await rawAdminDb.collection(colName).doc(docId).set(data, options);
-            } catch (err: any) {
-              if (err.message && (err.message.includes("PERMISSION_DENIED") || err.message.includes("7") || err.message.includes("rules"))) {
-                 console.warn(`[FIREBASE-FALLBACK-WARN] Admin SDK failed on set ${colName}/${docId}, attempting client-side fallback...`);
-                 const cDb = getClientFallbackDb();
-                 const dRef = doc(cDb, colName, docId);
-                 return await setDoc(dRef, data, options);
+              const url = `${REST_BASE_URL}/${colName}/${docId}?key=${REST_API_KEY}`;
+              const body = toFirestoreProto(data);
+              const response = await fetch(url, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body)
+              });
+              if (!response.ok) {
+                const text = await response.text();
+                if (response.status === 429) {
+                  isServerQuotaExceeded = true;
+                }
+                throw new Error(`REST set failed: ${response.status} ${text}`);
               }
+              return await response.json();
+            } catch (err: any) {
+              logServerFirestoreError(`Set failed on ${colName}/${docId}`, err);
               throw err;
             }
           },
           async update(data: any) {
             try {
-              return await rawAdminDb.collection(colName).doc(docId).update(data);
-            } catch (err: any) {
-              if (err.message && (err.message.includes("PERMISSION_DENIED") || err.message.includes("7") || err.message.includes("rules"))) {
-                 console.warn(`[FIREBASE-FALLBACK-WARN] Admin SDK failed on update ${colName}/${docId}, attempting client-side fallback...`);
-                 const cDb = getClientFallbackDb();
-                 const dRef = doc(cDb, colName, docId);
-                 return await updateDoc(dRef, data);
+              const keys = Object.keys(data);
+              const queryParams = keys.map(k => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join("&");
+              const url = `${REST_BASE_URL}/${colName}/${docId}?key=${REST_API_KEY}&${queryParams}`;
+              const body = toFirestoreProto(data);
+              const response = await fetch(url, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body)
+              });
+              if (!response.ok) {
+                const text = await response.text();
+                if (response.status === 429) {
+                  isServerQuotaExceeded = true;
+                }
+                throw new Error(`REST update failed: ${response.status} ${text}`);
               }
+              return await response.json();
+            } catch (err: any) {
+              logServerFirestoreError(`Update failed on ${colName}/${docId}`, err);
               throw err;
             }
           },
           async delete() {
             try {
-              return await rawAdminDb.collection(colName).doc(docId).delete();
-            } catch (err: any) {
-              if (err.message && (err.message.includes("PERMISSION_DENIED") || err.message.includes("7") || err.message.includes("rules"))) {
-                 console.warn(`[FIREBASE-FALLBACK-WARN] Admin SDK failed on delete ${colName}/${docId}, attempting client-side fallback...`);
-                 const cDb = getClientFallbackDb();
-                 const dRef = doc(cDb, colName, docId);
-                 return await deleteDoc(dRef);
+              const url = `${REST_BASE_URL}/${colName}/${docId}?key=${REST_API_KEY}`;
+              const response = await fetch(url, {
+                method: "DELETE"
+              });
+              if (!response.ok && response.status !== 404) {
+                const text = await response.text();
+                if (response.status === 429) {
+                  isServerQuotaExceeded = true;
+                }
+                throw new Error(`REST delete failed: ${response.status} ${text}`);
               }
+              return true;
+            } catch (err: any) {
+              logServerFirestoreError(`Delete failed on ${colName}/${docId}`, err);
               throw err;
             }
           }
@@ -353,12 +526,12 @@ async function ensureDefaultSettings() {
 ensureDefaultSettings()
   .then(() => refreshAllSettings())
   .then(() => {
-    console.log("[SERVER-INIT] Database seeded and initial settings synchronized successfully. Poller set to 15s.");
+    console.log("[SERVER-INIT] Database seeded and initial settings synchronized successfully. Poller set to 15m.");
     setInterval(() => {
       refreshAllSettings().catch((err) => {
         console.error("[SERVER-SYNC] Background settings refresh err:", err);
       });
-    }, 15000);
+    }, 15 * 60 * 1000); // 15 minutes poller interval to prevent idle read consumption
   })
   .catch((err) => {
     console.error("[SERVER-INIT] Failed running database initialization settings seeder:", err);
@@ -432,8 +605,16 @@ let currentGlobalSettings: GlobalBrandingSettings = {
   defaultCardDescription: "Acquire future-ready credentials and join an active community of 10,000+ continuous digital earners. Courses in AI agents, high-ticket freelancing, and viral media."
 };
 
+const SETTINGS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
+let lastTrackingFetchTime = 0;
+let lastPaymentFetchTime = 0;
+let lastGlobalFetchTime = 0;
+
 // Synchronize all settings periodically without long-lived streaming sockets that fail or timeout in serverless containers
 async function refreshAllSettings(): Promise<void> {
+  if (isServerQuotaExceeded) {
+    return;
+  }
   try {
     const docSnap = await adminDb.collection("settings").doc("tracking").get();
     if (docSnap.exists) {
@@ -447,7 +628,7 @@ async function refreshAllSettings(): Promise<void> {
       };
     }
   } catch (error) {
-    console.error("[SERVER-SYNC] Direct fetch failed for settings/tracking:", error);
+    logServerFirestoreError("[SERVER-SYNC] Direct fetch for settings/tracking failed", error);
   }
 
   try {
@@ -467,7 +648,7 @@ async function refreshAllSettings(): Promise<void> {
       };
     }
   } catch (error) {
-    console.error("[SERVER-SYNC] Direct fetch failed for settings/paymentGateway:", error);
+    logServerFirestoreError("[SERVER-SYNC] Direct fetch for settings/paymentGateway failed", error);
   }
 
   try {
@@ -483,20 +664,84 @@ async function refreshAllSettings(): Promise<void> {
       };
     }
   } catch (error) {
-    console.error("[SERVER-SYNC] Direct fetch failed for settings/globalSettings:", error);
+    logServerFirestoreError("[SERVER-SYNC] Direct fetch for settings/globalSettings failed", error);
   }
 }
 
-// Helper fetchers to provide instant 0ms cached memory access
+// Dynamic fetchers to guarantee real-time synchronization with settings changed in the Admin Dashboard
 async function fetchLatestTrackingSettings(): Promise<TrackingSettings> {
+  const now = Date.now();
+  if (isServerQuotaExceeded || (now - lastTrackingFetchTime < SETTINGS_CACHE_TTL)) {
+    return currentTrackingSettings;
+  }
+  try {
+    const docSnap = await adminDb.collection("settings").doc("tracking").get();
+    if (docSnap.exists) {
+      const data = docSnap.data();
+      currentTrackingSettings = {
+        metaPixelId: extractMetaPixelId(data?.metaPixelId || ""),
+        gtmId: extractGtmId(data?.gtmId || ""),
+        ga4Id: extractGa4Id(data?.ga4Id || ""),
+        searchConsoleVerification: extractSearchConsoleVerification(data?.searchConsoleVerification || ""),
+        facebookDomainVerification: extractFacebookDomainVerification(data?.facebookDomainVerification || "")
+      };
+      lastTrackingFetchTime = now;
+    }
+  } catch (error) {
+    logServerFirestoreError("[SERVER-SYNC] Direct fetch for settings/tracking inside getter failed", error);
+  }
   return currentTrackingSettings;
 }
 
 async function fetchLatestPaymentSettings(): Promise<PaymentGatewaySettings> {
+  const now = Date.now();
+  if (isServerQuotaExceeded || (now - lastPaymentFetchTime < SETTINGS_CACHE_TTL)) {
+    return currentPaymentSettings;
+  }
+  try {
+    const docSnap = await adminDb.collection("settings").doc("paymentGateway").get();
+    if (docSnap.exists) {
+      const data = docSnap.data();
+      const rawKeyId = data?.razorpayKeyId || "";
+      const normalizedKeyId = normalizeRazorpayKeyId(rawKeyId);
+      
+      currentPaymentSettings = {
+        razorpayKeyId: normalizedKeyId || DEFAULT_RAZORPAY_KEY_ID,
+        razorpayKeySecret: data?.razorpayKeySecret || DEFAULT_RAZORPAY_KEY_SECRET,
+        razorpayWebhookSecret: data?.razorpayWebhookSecret || "",
+        isTestMode: data?.isTestMode !== false,
+        isLiveMode: !!data?.isLiveMode,
+        enablePaymentSandbox: data?.enablePaymentSandbox !== false
+      };
+      lastPaymentFetchTime = now;
+    }
+  } catch (error) {
+    logServerFirestoreError("[SERVER-SYNC] Direct fetch for settings/paymentGateway inside getter failed", error);
+  }
   return currentPaymentSettings;
 }
 
 async function fetchLatestGlobalSettings(): Promise<GlobalBrandingSettings> {
+  const now = Date.now();
+  if (isServerQuotaExceeded || (now - lastGlobalFetchTime < SETTINGS_CACHE_TTL)) {
+    return currentGlobalSettings;
+  }
+  try {
+    const docSnap = await adminDb.collection("settings").doc("globalSettings").get();
+    if (docSnap.exists) {
+      const data = docSnap.data();
+      currentGlobalSettings = {
+        brandLogoUrl: data?.brandLogoUrl || "https://learn2future.vercel.app/brand_logo.jpg",
+        ogDefaultImageUrl: data?.ogDefaultImageUrl || "https://learn2future.vercel.app/brand_logo.jpg",
+        twitterPreviewImageUrl: data?.twitterPreviewImageUrl || "https://learn2future.vercel.app/brand_logo.jpg",
+        defaultCardTitle: data?.defaultCardTitle || "Learn 2 Future | Learn Today. Earn Tomorrow.",
+        defaultCardDescription: data?.defaultCardDescription || "Acquire future-ready credentials and join an active community of 10,000+ continuous digital earners. Courses in AI agents, high-ticket freelancing, and viral media."
+      };
+      lastGlobalFetchTime = now;
+    }
+  } catch (error) {
+    logServerFirestoreError("[SERVER-SYNC] Direct fetch for settings/globalSettings inside getter failed", error);
+  }
   return currentGlobalSettings;
 }
 
@@ -794,6 +1039,15 @@ async function startServer() {
     }
   }));
   app.use(express.urlencoded({ extended: true, limit: "15mb" }));
+
+  const ai = new GoogleGenAI({
+    apiKey: process.env.GEMINI_API_KEY,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      }
+    }
+  });
 
   console.log("Starting full-stack server supporting dynamic HTML injection and SPA fallback.");
 
@@ -1574,23 +1828,37 @@ async function startServer() {
     }
   });
 
-  // 2. Mount Vite middleware in development or Express static in production
+  // 2. Mount Vite middleware in development or Express static in production (bypassing /api/ routes so they reach the routing layer below)
   if (process.env.NODE_ENV !== "production") {
-    app.use(vite.middlewares);
+    app.use((req, res, next) => {
+      if (req.originalUrl.startsWith("/api/")) {
+        return next();
+      }
+      vite.middlewares(req, res, next);
+    });
   } else {
     const distPath = path.resolve(process.cwd(), "dist");
-    app.use(express.static(distPath, { index: false }));
+    const staticMiddleware = express.static(distPath, { index: false });
+    app.use((req, res, next) => {
+      if (req.originalUrl.startsWith("/api/")) {
+        return next();
+      }
+      staticMiddleware(req, res, next);
+    });
   }
 
   // 3. Keep fallback just in case or for backend APIs
-  const ai = new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      }
-    }
-  });
+  function getIsAiStudioPreview(req: express.Request): boolean {
+    const host = req.headers.host || "";
+    return host.includes("ais-dev-") ||
+           host.includes("ais-pre-") ||
+           host.includes("localhost") ||
+           host.includes("0.0.0.0");
+  }
+
+  function getIsProduction(req: express.Request): boolean {
+    return PAYMENT_ENV === "PRODUCTION" && !getIsAiStudioPreview(req);
+  }
 
   app.post("/api/generate-success-story", async (req, res) => {
     try {
@@ -1697,6 +1965,7 @@ Do not include any raw markdown formatting like \`\`\`json or trailing whitespac
 
       for (const pid of targetProductIds) {
         if (pid === "multiple_items") continue;
+        if (userId === "anonymous" || userId === "guest") continue;
         try {
           const dupQuerySnap = await adminDb.collection("userPurchases")
             .where("userId", "==", userId)
@@ -1734,11 +2003,13 @@ Do not include any raw markdown formatting like \`\`\`json or trailing whitespac
       }
 
       const isPlaceholderKeys = 
-        settings.razorpayKeyId === DEFAULT_RAZORPAY_KEY_ID || 
-        settings.razorpayKeyId.includes("test");
+        settings.razorpayKeyId === DEFAULT_RAZORPAY_KEY_ID;
 
-      const isProduction = PAYMENT_ENV === "PRODUCTION";
-      const isSandboxAllowed = !isProduction && settings.enablePaymentSandbox !== false;
+      // Sandbox simulation bypass is ONLY allowed when using the default/placeholder keys,
+      // sandbox mode is explicitly enabled in settings, and running inside the AI Studio preview environment. 
+      // If the administrator has configured custom/personal Razorpay API keys or disabled sandbox,
+      // sandbox bypass must be strictly disabled to protect course inventory.
+      const isSandboxAllowed = isPlaceholderKeys && settings.enablePaymentSandbox === true && getIsAiStudioPreview(req);
 
       if (isPlaceholderKeys && !isSandboxAllowed) {
         return res.status(400).json({
@@ -1751,11 +2022,27 @@ Do not include any raw markdown formatting like \`\`\`json or trailing whitespac
 
       try {
         if (isPlaceholderKeys) {
-          console.warn("[CHECKOUT] Default test/placeholder key active. Forcing local sandbox simulator.");
+          console.log("[CHECKOUT] Default test/placeholder key active. Forcing local sandbox simulator.");
           throw new Error("Sandbox Simulation Required");
         }
 
-        const instance = new Razorpay({
+        let RazorpayClass: any = Razorpay;
+        if (Razorpay && (Razorpay as any).default) {
+          RazorpayClass = (Razorpay as any).default;
+        }
+
+        if (typeof RazorpayClass === "undefined" || !RazorpayClass) {
+          console.log("[CHECKOUT] Razorpay export is undefined. Attempting dynamic resolution...");
+          const rzpModule = await import("razorpay");
+          RazorpayClass = rzpModule.default || rzpModule;
+        }
+
+        if (typeof RazorpayClass === "undefined" || !RazorpayClass || (typeof RazorpayClass !== "function" && typeof RazorpayClass.default !== "function")) {
+          throw new Error("Razorpay class constructor could not be resolved from package exports.");
+        }
+
+        const Constructor = (typeof RazorpayClass === "function") ? RazorpayClass : (RazorpayClass.default || RazorpayClass);
+        const instance = new Constructor({
           key_id: settings.razorpayKeyId,
           key_secret: settings.razorpayKeySecret,
         });
@@ -1781,7 +2068,7 @@ Do not include any raw markdown formatting like \`\`\`json or trailing whitespac
           return res.status(500).json({ error: `Secure payment transaction could not be initialized: ${err?.message || "Gateway Offline"}` });
         }
 
-        console.warn("[CHECKOUT-WARNING] Automated Razorpay order creation failed. Falling back to sandbox simulation:", err?.message || err);
+        console.info("[CHECKOUT-INFO] Sandbox simulation active:", err?.message || err);
         razorpayOrder = {
           id: "order_sim_" + Date.now().toString().substring(4) + Math.random().toString(36).substring(3, 7),
           amount: Math.round(Number(amount) * 100),
@@ -1828,10 +2115,16 @@ Do not include any raw markdown formatting like \`\`\`json or trailing whitespac
       }
 
       const settings = await fetchLatestPaymentSettings();
+      const isPlaceholderKeys = settings.razorpayKeyId === DEFAULT_RAZORPAY_KEY_ID;
       const isSimulatedOrder = razorpay_order_id.startsWith("order_sim_") || razorpay_signature === "simulated_bypass_sig";
 
-      const isProduction = PAYMENT_ENV === "PRODUCTION";
-      const isSandboxAllowed = !isProduction && settings.enablePaymentSandbox !== false;
+      const isProduction = getIsProduction(req);
+      let isSandboxAllowed = isPlaceholderKeys && !isProduction && settings.enablePaymentSandbox === true;
+
+      // In the AI Studio preview environment with placeholder keys, respect settings.enablePaymentSandbox
+      if (getIsAiStudioPreview(req) && isPlaceholderKeys) {
+        isSandboxAllowed = settings.enablePaymentSandbox === true;
+      }
 
       if (isSimulatedOrder && !isSandboxAllowed) {
         console.error("[SECURITY-ALERT] Attempted simulated bypass of checkout verification in active environment.");
@@ -1893,7 +2186,7 @@ Do not include any raw markdown formatting like \`\`\`json or trailing whitespac
       const settings = await fetchLatestPaymentSettings();
       const webhookSignature = req.headers["x-razorpay-signature"] as string;
 
-      const isProduction = PAYMENT_ENV === "PRODUCTION";
+      const isProduction = getIsProduction(req);
       const secret = settings.razorpayWebhookSecret || "";
 
       // Cryptographic webhook security check

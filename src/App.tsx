@@ -34,6 +34,8 @@ const MainLayout: React.FC = () => {
     authModalMessage, 
     loginWithGoogle, 
     loginAsDemoStudent,
+    loginAsDemoAdmin,
+    isQuotaExceeded,
     user, 
     setCurrentPage,
     isAdmin,
@@ -147,6 +149,48 @@ const MainLayout: React.FC = () => {
       {seoData && <SEOHead {...seoData} />}
       {/* Universal header navigation */}
       <Navbar />
+
+      {isQuotaExceeded && (
+        <div className="bg-gradient-to-r from-amber-600 to-red-600 text-white py-4 px-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs sm:text-sm font-sans z-50 animate-in slide-in-from-top duration-300 border-b border-amber-500/20">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center gap-3 max-w-7xl mx-auto w-full">
+            <div className="font-bold uppercase tracking-wider bg-black/35 text-amber-300 px-2.5 py-1 rounded text-[10px] whitespace-nowrap border border-amber-500/20 animate-pulse">
+              ⚠️ DB Offline (Quota Exceeded)
+            </div>
+            <div className="flex-grow space-y-0.5">
+              <p className="font-bold text-sm text-amber-50">Database Limit reached for today (Spark Plan 50,000 daily read limits exhausted).</p>
+              <p className="text-neutral-200 text-[11px] leading-normal font-sans">
+                Google Cloud has temporarily frozen database access on this project. You can still bypass and test every feature live using our local developer sandbox.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 shrink-0 pt-1 lg:pt-0">
+              <a
+                href="https://console.firebase.google.com/project/gen-lang-client-0184060575/firestore/databases/ai-studio-2980de92-2452-4a19-90f8-80bf9307d675/data?openUpgradeDialog=true"
+                target="_blank"
+                referrerPolicy="no-referrer"
+                className="bg-black/40 hover:bg-black/60 border border-amber-305/30 hover:border-amber-305/50 text-amber-200 font-mono text-[10px] font-bold py-1.5 px-3 rounded-lg transition-all flex items-center gap-1 uppercase tracking-wider"
+              >
+                Open Google Console <ArrowUpRight className="w-3.5 h-3.5" />
+              </a>
+              <button
+                onClick={() => {
+                  loginAsDemoStudent();
+                }}
+                className="bg-white hover:bg-neutral-100 text-neutral-900 font-sans text-[10px] font-bold py-1.5 px-3 rounded-lg transition-all shadow-sm uppercase tracking-wider"
+              >
+                Bypass as Student
+              </button>
+              <button
+                onClick={() => {
+                  loginAsDemoAdmin();
+                }}
+                className="bg-amber-400 hover:bg-amber-500 text-black font-sans text-[10px] font-bold py-1.5 px-3 rounded-lg transition-all shadow-sm uppercase tracking-wider"
+              >
+                Bypass as Admin
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {authError && (
         <div className="bg-red-600 text-white py-3 px-4 shadow-md flex items-center justify-between text-xs sm:text-sm font-sans z-50 animate-in slide-in-from-top duration-300">

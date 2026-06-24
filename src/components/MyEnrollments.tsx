@@ -37,7 +37,7 @@ import {
   AlertTriangle,
   HelpCircle
 } from "lucide-react";
-import { collection, query, where, onSnapshot, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, where, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "firebase/auth";
 import { db, auth, handleFirestoreError, OperationType } from "../firebase";
 import { Course, Order } from "../types";
@@ -323,7 +323,7 @@ export const MyEnrollments: React.FC = () => {
 
     setLoadingOrders(true);
 
-    if (user.uid === "demo_admin_uid") {
+    if (user.uid === "demo_admin_uid" || user.uid === "demo_student_uid") {
       try {
         const local = localStorage.getItem("demo_orders");
         if (local) {
@@ -337,98 +337,148 @@ export const MyEnrollments: React.FC = () => {
       return;
     }
 
-    const unsub = onSnapshot(
-      query(collection(db, "orders"), where("email", "==", user.email)),
-      (snap) => {
-        const list: Order[] = [];
-        snap.forEach((docSnap) => {
-          list.push({ id: docSnap.id, ...docSnap.data() } as Order);
-        });
-        setOrders(list);
-        setLoadingOrders(false);
-      },
-      (err) => {
-        console.error("Orders snaps listener errored:", err);
-        setLoadingOrders(false);
-      }
-    );
+    // ── FIXED: One-time getDocs instead of persistent onSnapshot ──
+    let cancelled = false;
 
-    return () => unsub();
+    async function fetchOrders() {
+      try {
+        const snap = await getDocs(query(collection(db, "orders"), where("email", "==", user.email)));
+        if (cancelled) return;
+        const list: Order[] = [];
+        snap.forEach((docSnap) => list.push({ id: docSnap.id, ...docSnap.data() } as Order));
+        setOrders(list);
+      } catch (err) {
+        if (!cancelled) console.error("[MyEnrollments] Orders fetch error:", err);
+      } finally {
+        if (!cancelled) setLoadingOrders(false);
+      }
+    }
+
+    fetchOrders();
+    return () => { cancelled = true; };
   }, [user]);
 
   // Affiliate program database listeners
   useEffect(() => {
-    if (!user?.uid || user.uid === "demo_admin_uid") {
+    if (!user?.uid) {
       setLoadingAffiliateApp(false);
       return;
     }
 
-    setLoadingAffiliateApp(true);
+    if (user.uid === "demo_admin_uid" || user.uid === "demo_student_uid") {
+      setLoadingAffiliateApp(true);
+      try {
+        const storedApp = localStorage.getItem("demo_affiliate_app");
+        if (storedApp) {
+          setAffiliateApp(JSON.parse(storedApp));
+        } else {
+          // Default mock affiliate application
+          const defaultDemoApp = {
+            id: user.uid,
+            uid: user.uid,
+            fullName: dbUser?.fullName || user.displayName || "Demo Student",
+            email: user.email,
+            mobile: dbUser?.mobile || "+1-555-0199",
+            preferredCoupon: "DEMO15",
+            status: "approved", // Approved in demo mode so user gets to test payout requests!
+            timesUsed: 2,
+            totalOrders: 2,
+            totalRevenue: 3000,
+            estimatedEarnings: 450,
+            pendingEarnings: 600, // Meets the ₹500 threshold so they can test requesting a payout!
+            paidEarnings: 0,
+            upiId: "",
+            bankAccount: "",
+            ifsc: "",
+            beneficiaryName: ""
+          };
+          setAffiliateApp(defaultDemoApp);
+        }
 
-    // 1. Listen to Affiliate Application Document
-    const unsubApp = onSnapshot(
-      doc(db, "affiliate_applications", user.uid),
-      (docSnap) => {
-        if (docSnap.exists()) {
-          setAffiliateApp({ id: docSnap.id, ...docSnap.data() });
+        const storedSales = localStorage.getItem("demo_affiliate_sales");
+        if (storedSales) {
+          setAffiliateSales(JSON.parse(storedSales));
+        } else {
+          const defaultSales = [
+            {
+              id: "sale_sim_1",
+              affiliateUid: user.uid,
+              buyerEmail: "buyer_one@gmail.com",
+              buyerName: "Rahul Sharma",
+              courseTitle: "Fullstack Web Engineering",
+              coursePrice: 1999,
+              commissionPercent: 15,
+              allocatedCommission: 300,
+              purchaseDate: { seconds: Math.floor(Date.now() / 1000) - 86400 }
+            },
+            {
+              id: "sale_sim_2",
+              affiliateUid: user.uid,
+              buyerEmail: "buyer_two@gmail.com",
+              buyerName: "Sneha Patel",
+              courseTitle: "Advanced JavaScript Masters",
+              coursePrice: 999,
+              commissionPercent: 15,
+              allocatedCommission: 150,
+              purchaseDate: { seconds: Math.floor(Date.now() / 1000) - 172800 }
+            }
+          ];
+          setAffiliateSales(defaultSales);
+        }
+
+        const storedPayouts = localStorage.getItem("demo_payout_requests");
+        if (storedPayouts) {
+          setPayoutsList(JSON.parse(storedPayouts));
+        } else {
+          setPayoutsList([]);
+        }
+      } catch (err) {
+        console.error("Error loading demo affiliate state:", err);
+      }
+      setLoadingAffiliateApp(false);
+      return;
+    }
+
+    // ── FIXED: One-time getDocs instead of 3 persistent onSnapshot listeners ──
+    setLoadingAffiliateApp(true);
+    let cancelled = false;
+
+    async function fetchAffiliateData() {
+      try {
+        const [appSnap, salesSnap, payoutsSnap] = await Promise.all([
+          getDoc(doc(db, "affiliate_applications", user.uid)),
+          getDocs(query(collection(db, "affiliate_sales"), where("affiliateUid", "==", user.uid))),
+          getDocs(query(collection(db, "payout_requests"), where("uid", "==", user.uid))),
+        ]);
+        if (cancelled) return;
+
+        // App doc
+        if (appSnap.exists()) {
+          setAffiliateApp({ id: appSnap.id, ...appSnap.data() });
         } else {
           setAffiliateApp(null);
         }
-        setLoadingAffiliateApp(false);
-      },
-      (err) => {
-        console.error("Error listening to affiliate application:", err);
-        setLoadingAffiliateApp(false);
-      }
-    );
 
-    // 2. Listen to Affiliate Sales (Order History)
-    const unsubSales = onSnapshot(
-      query(collection(db, "affiliate_sales"), where("affiliateUid", "==", user.uid)),
-      (snap) => {
-        const list: any[] = [];
-        snap.forEach((docSnap) => {
-          list.push({ id: docSnap.id, ...docSnap.data() });
-        });
-        // Sort sales by purchaseDate or date desc
-        list.sort((a, b) => {
-          const dateA = a.purchaseDate?.seconds || 0;
-          const dateB = b.purchaseDate?.seconds || 0;
-          return dateB - dateA;
-        });
-        setAffiliateSales(list);
-      },
-      (err) => {
-        console.error("Error listening to affiliate sales:", err);
-      }
-    );
+        // Sales
+        const salesList: any[] = [];
+        salesSnap.forEach((d) => salesList.push({ id: d.id, ...d.data() }));
+        salesList.sort((a, b) => (b.purchaseDate?.seconds || 0) - (a.purchaseDate?.seconds || 0));
+        setAffiliateSales(salesList);
 
-    // 3. Listen to Payout Requests
-    const unsubPayouts = onSnapshot(
-      query(collection(db, "payout_requests"), where("uid", "==", user.uid)),
-      (snap) => {
-        const list: any[] = [];
-        snap.forEach((docSnap) => {
-          list.push({ id: docSnap.id, ...docSnap.data() });
-        });
-        // Sort by requestDate desc
-        list.sort((a, b) => {
-          const dateA = a.requestDate?.seconds || 0;
-          const dateB = b.requestDate?.seconds || 0;
-          return dateB - dateA;
-        });
-        setPayoutsList(list);
-      },
-      (err) => {
-        console.error("Error listening to payout requests:", err);
+        // Payouts
+        const payoutsList: any[] = [];
+        payoutsSnap.forEach((d) => payoutsList.push({ id: d.id, ...d.data() }));
+        payoutsList.sort((a, b) => (b.requestDate?.seconds || 0) - (a.requestDate?.seconds || 0));
+        setPayoutsList(payoutsList);
+      } catch (err) {
+        if (!cancelled) console.error("[MyEnrollments] Affiliate data fetch error:", err);
+      } finally {
+        if (!cancelled) setLoadingAffiliateApp(false);
       }
-    );
+    }
 
-    return () => {
-      unsubApp();
-      unsubSales();
-      unsubPayouts();
-    };
+    fetchAffiliateData();
+    return () => { cancelled = true; };
   }, [user]);
 
   // Sync settlement details from affiliateApp when loaded
@@ -476,6 +526,14 @@ export const MyEnrollments: React.FC = () => {
         upDoc.beneficiaryName = settlementBeneficiaryName.trim();
       }
 
+      if (user?.uid === "demo_admin_uid" || user?.uid === "demo_student_uid") {
+        const updatedApp = { ...affiliateApp, ...upDoc };
+        setAffiliateApp(updatedApp);
+        localStorage.setItem("demo_affiliate_app", JSON.stringify(updatedApp));
+        setSettlementSuccess("Settlement details saved & synchronized successfully (Demo Mode)!");
+        return;
+      }
+
       await updateDoc(doc(db, "affiliate_applications", user.uid), upDoc);
       setSettlementSuccess("Settlement details saved & synchronized successfully!");
     } catch (err: any) {
@@ -520,7 +578,7 @@ export const MyEnrollments: React.FC = () => {
     window.open(deliverableLink, "_blank", "noopener,noreferrer");
 
     // Track access metrics
-    if (user?.uid === "demo_admin_uid") {
+    if (user?.uid === "demo_admin_uid" || user?.uid === "demo_student_uid") {
       try {
         const local = localStorage.getItem("demo_orders");
         if (local) {
@@ -594,6 +652,47 @@ export const MyEnrollments: React.FC = () => {
 
     setSubmittingApp(true);
     try {
+      if (user?.uid === "demo_admin_uid" || user?.uid === "demo_student_uid") {
+        const payload = {
+          uid: user.uid,
+          fullName: dbUser?.fullName || user.displayName || "Demo Student",
+          email: user.email,
+          mobile: dbUser?.mobile || appMobile.trim() || "+1-555-0199",
+          preferredCoupon: cleanedCoupon,
+          question: promoAnswer.trim(),
+          status: "pending",
+          createdAt: new Date(),
+          address: dbUser?.address || "",
+          city: dbUser?.city || "",
+          state: dbUser?.state || "",
+          country: dbUser?.country || "",
+          instagramUrl: dbUser?.instagramUrl || "",
+          youtubeUrl: dbUser?.youtubeUrl || "",
+          facebookUrl: dbUser?.facebookUrl || "",
+          linkedinUrl: dbUser?.linkedinUrl || "",
+          twitterUrl: dbUser?.twitterUrl || "",
+          telegramUsername: dbUser?.telegramUsername || "",
+          websiteUrl: dbUser?.websiteUrl || "",
+          timesUsed: 0,
+          totalOrders: 0,
+          totalRevenue: 0,
+          estimatedEarnings: 0,
+          pendingEarnings: 0,
+          paidEarnings: 0,
+          upiId: "",
+          bankAccount: "",
+          ifsc: "",
+          beneficiaryName: ""
+        };
+        setAffiliateApp(payload);
+        localStorage.setItem("demo_affiliate_app", JSON.stringify(payload));
+        setAppSuccess("Your Affiliate Application was submitted successfully for team review (Demo Mode)!");
+        setPrefCoupon("");
+        setPromoAnswer("");
+        setSubmittingApp(false);
+        return;
+      }
+
       // Check for duplicates
       const couponSnap = await getDoc(doc(db, "coupons", cleanedCoupon));
       if (couponSnap.exists()) {
@@ -714,6 +813,34 @@ export const MyEnrollments: React.FC = () => {
         paymentDetails: pDetails
       };
 
+      if (user?.uid === "demo_admin_uid" || user?.uid === "demo_student_uid") {
+        const payoutPayload = {
+          id: payoutId,
+          uid: user.uid,
+          name: dbUser?.fullName || affiliateApp.fullName || "Partner",
+          email: user.email,
+          phone: dbUser?.mobile || affiliateApp.mobile || "",
+          couponCode: affiliateApp.couponCode || affiliateApp.preferredCoupon || "",
+          commissionPercent: Number(affiliateApp.commissionPercent || 15),
+          amount: currentPending,
+          requestDate: new Date(),
+          status: "Pending",
+          paymentDetails: pDetails
+        };
+        const newList = [payoutPayload, ...payoutsList];
+        setPayoutsList(newList);
+        localStorage.setItem("demo_payout_requests", JSON.stringify(newList));
+
+        // Deduct from pending and lock
+        const updatedApp = { ...affiliateApp, pendingEarnings: 0 };
+        setAffiliateApp(updatedApp);
+        localStorage.setItem("demo_affiliate_app", JSON.stringify(updatedApp));
+
+        setPayoutSuccess(`Payout request for ₹${currentPending.toFixed(2)} submitted successfully (Demo Mode)!`);
+        setSubmittingPayout(false);
+        return;
+      }
+
       await setDoc(doc(db, "payout_requests", payoutId), payoutPayload);
 
       // Deduct from pending and lock
@@ -733,6 +860,15 @@ export const MyEnrollments: React.FC = () => {
 
   const handleResetApplication = async () => {
     if (window.confirm("Are you sure you want to withdraw this application to submit a new one?")) {
+      if (user?.uid === "demo_admin_uid" || user?.uid === "demo_student_uid") {
+        setAffiliateApp(null);
+        localStorage.removeItem("demo_affiliate_app");
+        localStorage.removeItem("demo_payout_requests");
+        localStorage.removeItem("demo_affiliate_sales");
+        setAppError("");
+        setAppSuccess("");
+        return;
+      }
       try {
         await deleteDoc(doc(db, "affiliate_applications", user.uid));
         setAppError("");

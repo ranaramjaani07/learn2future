@@ -20,7 +20,7 @@ import {
   ShoppingBag,
   Share2
 } from "lucide-react";
-import { collection, getDocs, addDoc, serverTimestamp, query, orderBy, onSnapshot, doc, getDoc } from "firebase/firestore";
+import { collection, getDocs, addDoc, serverTimestamp, query, orderBy, doc, getDoc } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage, handleFirestoreError, OperationType } from "../firebase";
 import { Course, Order } from "../types";
@@ -357,33 +357,52 @@ ${course.title}
 
   // Fetch courses from Firestore on mount with real-time updates
   useEffect(() => {
+    // ── FIXED: One-time getDocs with 15-min cache instead of persistent onSnapshot ──
     setLoading(true);
-    const collectionName = "courses";
-    const q = query(collection(db, collectionName), orderBy("createdAt", "desc"));
-    
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const docsList: Course[] = [];
-        snapshot.forEach((docSnap) => {
-          docsList.push({ id: docSnap.id, ...docSnap.data() } as Course);
-        });
+    let cancelled = false;
+    const CACHE_KEY = "courses_list_cache";
+    const CACHE_TTL = 15 * 60 * 1000;
 
-        if (docsList.length > 0) {
-          setCourses(docsList);
-        } else {
-          setCourses(defaultCourses); // Fallback if Firestore is empty initially
+    async function fetchCourses() {
+      // Serve from cache first for instant render
+      try {
+        const stored = localStorage.getItem(CACHE_KEY);
+        if (stored) {
+          const { ts, data } = JSON.parse(stored);
+          if (Date.now() - ts < CACHE_TTL) {
+            if (!cancelled) {
+              setCourses(data.length > 0 ? data : defaultCourses);
+              setLoading(false);
+            }
+            return;
+          }
+          // Show stale cache while refreshing
+          if (!cancelled && data.length > 0) setCourses(data);
         }
-        setLoading(false);
-      },
-      (err) => {
-        console.warn("Could not retrieve live courses streaming, falling back to cached list:", err);
-        setCourses(defaultCourses);
-        setLoading(false);
-      }
-    );
+      } catch (_) {}
 
-    return () => unsubscribe();
+      try {
+        const snapshot = await getDocs(query(collection(db, "courses"), orderBy("createdAt", "desc")));
+        if (cancelled) return;
+        const docsList: Course[] = [];
+        snapshot.forEach((docSnap) => docsList.push({ id: docSnap.id, ...docSnap.data() } as Course));
+        const result = docsList.length > 0 ? docsList : defaultCourses;
+        setCourses(result);
+        if (docsList.length > 0) {
+          localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: docsList }));
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.warn("[Courses] Fetch failed, using default:", err);
+          setCourses(defaultCourses);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    fetchCourses();
+    return () => { cancelled = true; };
   }, []);
 
   // Prepopulate client order profile once logged in

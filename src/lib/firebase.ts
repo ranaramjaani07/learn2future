@@ -53,8 +53,20 @@ export function handleFirestoreError(
   operationType: OperationType,
   path: string | null
 ): never {
+  const errStr = error instanceof Error ? error.message : String(error);
+  const isQuota =
+    errStr.toLowerCase().includes("quota") ||
+    errStr.toLowerCase().includes("resource_exhausted") ||
+    errStr.toLowerCase().includes("429");
+
+  if (isQuota) {
+    if (typeof window !== "undefined" && (window as any).__onFirestoreQuotaExceeded) {
+      (window as any).__onFirestoreQuotaExceeded();
+    }
+  }
+
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errStr,
     authInfo: {
       userId: auth.currentUser?.uid || null,
       email: auth.currentUser?.email || null,
@@ -64,6 +76,11 @@ export function handleFirestoreError(
     operationType,
     path,
   };
-  console.error("Firestore Error Detailed: ", JSON.stringify(errInfo, null, 2));
+
+  if (isQuota) {
+    console.warn("Firestore Quota/Limit Handled Gracefully: ", JSON.stringify(errInfo, null, 2));
+  } else {
+    console.error("Firestore Error Detailed: ", JSON.stringify(errInfo, null, 2));
+  }
   throw new Error(JSON.stringify(errInfo));
 }

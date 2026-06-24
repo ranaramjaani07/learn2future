@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { 
   User as FirebaseUser, 
   signInWithPopup, 
+  signInWithRedirect,
   GoogleAuthProvider, 
   signOut, 
   onAuthStateChanged,
@@ -14,7 +15,7 @@ import {
   reauthenticateWithCredential,
   browserPopupRedirectResolver
 } from "firebase/auth";
-import { doc, getDoc, onSnapshot, setDoc, updateDoc, serverTimestamp, collection, addDoc, arrayUnion, deleteDoc, query, where } from "firebase/firestore";
+import { doc, getDoc, getDocs, setDoc, updateDoc, serverTimestamp, collection, addDoc, arrayUnion, deleteDoc, query, where } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { GlobalSettings, User as DbUser, UserProfile, UserSettings } from "../types";
 
@@ -140,6 +141,8 @@ interface AppContextType {
   setUrlReferrerId: (ref: string | null) => void;
   selectedStudentUsername: string | null;
   setSelectedStudentUsername: (username: string | null) => void;
+  isQuotaExceeded: boolean;
+  setIsQuotaExceeded: (val: boolean) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -192,10 +195,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
   const [authError, setAuthError] = useState<string | null>(null);
 
+  const [isQuotaExceeded, setIsQuotaExceeded] = useState<boolean>(false);
+
   // Synchronized global orders state
   const [orders, setOrders] = useState<any[]>([]);
 
-  // Real-time Orders snapshot
+  // ── FIXED: One-time getDocs instead of persistent onSnapshot listener ──
   useEffect(() => {
     if (!user) {
       setOrders([]);
@@ -207,7 +212,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const local = localStorage.getItem("demo_orders");
         if (local) {
           const list = JSON.parse(local) as any[];
-          setOrders(list.filter(o => o.email === user.email));
+          setOrders(list.filter((o: any) => o.email === user.email));
         } else {
           setOrders([]);
         }
@@ -215,21 +220,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    const unsub = onSnapshot(
-      query(collection(db, "orders"), where("email", "==", user.email)),
-      (snap) => {
-        const list: any[] = [];
-        snap.forEach((docSnap) => {
-          list.push({ id: docSnap.id, ...docSnap.data() });
-        });
-        setOrders(list);
-      },
-      (err) => {
-        console.error("AppContext orders listener errored:", err);
-      }
-    );
+    let cancelled = false;
 
-    return () => unsub();
+    async function fetchOrders() {
+      try {
+        const { getDocs } = await import("firebase/firestore");
+        const snap = await getDocs(query(collection(db, "orders"), where("email", "==", user!.email)));
+        if (cancelled) return;
+        const list: any[] = [];
+        snap.forEach((docSnap) => list.push({ id: docSnap.id, ...docSnap.data() }));
+        setOrders(list);
+      } catch (err: any) {
+        if (cancelled) return;
+        const isQuota = err?.message?.toLowerCase().includes("quota") || err?.message?.toLowerCase().includes("resource_exhausted");
+        if (isQuota) {
+          console.warn("[AppContext] Orders fetch quota exceeded:", err);
+          setIsQuotaExceeded(true);
+        } else {
+          console.error("[AppContext] Orders fetch error:", err);
+        }
+      }
+    }
+
+    fetchOrders();
+    return () => { cancelled = true; };
   }, [user]);
 
   const hasPurchasedCourse = (userId: string | undefined, courseId: string) => {
@@ -237,8 +251,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return orders.some(o => 
       o.userId === userId && 
       o.courseId === courseId && 
-      (o.status?.toLowerCase() === "pending" || 
-       o.status?.toLowerCase() === "approved" || 
+      (o.status?.toLowerCase() === "approved" || 
        o.status?.toLowerCase() === "delivered" ||
        o.status?.toLowerCase() === "verified")
     );
@@ -276,17 +289,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   useEffect(() => {
-    const docRef = doc(db, "settings", "globalSettings");
-    const unsubscribe = onSnapshot(docRef, (snap) => {
-      if (snap.exists()) {
-        const data = snap.data() as GlobalSettings;
-        setGlobalSettings(data);
-        localStorage.setItem("demo_global_settings", JSON.stringify(data));
+    if (typeof window !== "undefined") {
+      (window as any).__onFirestoreQuotaExceeded = () => {
+        setIsQuotaExceeded(true);
+      };
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        delete (window as any).__onFirestoreQuotaExceeded;
       }
-    }, (err) => {
-      console.warn("Firestore settings onSnapshot error (using cached/default):", err);
-    });
-    return () => unsubscribe();
+    };
+  }, []);
+
+  // ── FIXED: One-time fetch with 30-min cache instead of persistent onSnapshot ──
+  useEffect(() => {
+    let cancelled = false;
+    const SETTINGS_TTL = 30 * 60 * 1000;
+
+    async function fetchGlobalSettings() {
+      // Check localStorage freshness first
+      const stored = localStorage.getItem("demo_global_settings_v2");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed.ts && Date.now() - parsed.ts < SETTINGS_TTL) {
+            if (!cancelled) setGlobalSettings(parsed.data);
+            return;
+          }
+          // Show stale while refreshing
+          if (!cancelled) setGlobalSettings(parsed.data);
+        } catch (_) {}
+      }
+
+      try {
+        const snap = await getDoc(doc(db, "settings", "globalSettings"));
+        if (cancelled) return;
+        if (snap.exists()) {
+          const data = snap.data() as GlobalSettings;
+          setGlobalSettings(data);
+          localStorage.setItem("demo_global_settings_v2", JSON.stringify({ ts: Date.now(), data }));
+          localStorage.setItem("demo_global_settings", JSON.stringify(data)); // backward compat
+        }
+      } catch (err: any) {
+        console.warn("[AppContext] globalSettings fetch failed (using cached/default):", err);
+        const isQuota = err?.message?.toLowerCase().includes("quota") || err?.message?.toLowerCase().includes("resource_exhausted");
+        if (isQuota && !cancelled) setIsQuotaExceeded(true);
+      }
+    }
+
+    fetchGlobalSettings();
+    return () => { cancelled = true; };
   }, []);
 
   const updateGlobalSettings = async (newSettings: GlobalSettings) => {
@@ -470,18 +522,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         }
 
+        // ── FIXED: One-time getDoc instead of persistent onSnapshot ──
         const userDocRef = doc(db, "users", currentUser.uid);
-        unsubscribeProfile = onSnapshot(userDocRef, (snap) => {
-           if (snap.exists()) {
-             setDbUser(snap.data() as DbUser);
-           } else {
-             setDbUser(null);
-           }
-           setLoadingProfile(false);
-        }, (err) => {
-           console.warn("Real-time listener for users failed:", err);
-           setLoadingProfile(false);
-        });
+        try {
+          const snap = await getDoc(userDocRef);
+          if (snap.exists()) {
+            setDbUser(snap.data() as DbUser);
+          } else {
+            setDbUser(null);
+          }
+        } catch (err: any) {
+          console.warn("[AppContext] User profile fetch failed:", err);
+          const isQuota = err?.message?.toLowerCase().includes("quota") || err?.message?.toLowerCase().includes("resource_exhausted");
+          if (isQuota) setIsQuotaExceeded(true);
+        } finally {
+          setLoadingProfile(false);
+        }
+        // unsubscribeProfile kept as null (no persistent listener)
 
         const adminCheck = await checkAdminPrivilege(currentUser);
         setIsAdmin(adminCheck);
@@ -512,7 +569,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       // 2. If verified/social user and NOT complete onboarding, force to onboarding
-      if (!dbUser || !dbUser.onboardingCompleted) {
+      if (!isQuotaExceeded && (!dbUser || !dbUser.onboardingCompleted)) {
         if (currentPage !== "onboarding") {
           setCurrentPageState("onboarding");
         }
@@ -540,15 +597,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAuthError(null);
     try {
       const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider, browserPopupRedirectResolver);
-      const isUserAdmin = await checkAdminPrivilege(result.user);
-      setIsAdmin(isUserAdmin);
+      try {
+        const result = await signInWithPopup(auth, provider, browserPopupRedirectResolver);
+        const isUserAdmin = await checkAdminPrivilege(result.user);
+        setIsAdmin(isUserAdmin);
+      } catch (popupErr: any) {
+        const code = popupErr?.code || "";
+        const msg = popupErr?.message || "";
+        if (code === "auth/popup-blocked" || msg.includes("popup-blocked") || msg.includes("blocked")) {
+          console.warn("Popup blocked, falling back to signInWithRedirect...");
+          await signInWithRedirect(auth, provider).catch(err => {
+            console.error("Redirect fallback failed too:", err);
+            throw err;
+          });
+        } else {
+          throw popupErr;
+        }
+      }
     } catch (error: any) {
       console.error("Popup authenticated cancelled or error:", error);
       const msg = error?.message || "";
       const code = error?.code || "";
       if (code === "auth/popup-blocked" || msg.includes("popup-blocked") || msg.includes("blocked")) {
-        setAuthError("Pop-up Blocked: Your browser blocked the login popup. Please look for an icon in your browser address bar to allow pop-ups, or open the app in a new tab.");
+        setAuthError("Pop-up Blocked: Your browser blocked the login popup. We attempted to trigger a security-safe redirect page login, or you can open the app in a new tab.");
       } else if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request" || msg.includes("popup-closed-by-user") || msg.includes("cancelled-popup-request") || msg.includes("cancelled")) {
         setAuthError("Sign-In Closed: The authentication pop-up was closed before finishing the sign-in. Since this app runs inside a sandboxed browser preview, please open this app in a new tab using the top-right button, or use the Demo Bypass.");
       } else if (msg.includes("Pending promise was never set") || msg.includes("INTERNAL ASSERTION FAILED")) {
@@ -721,17 +792,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCart([]);
       return;
     }
-    const q = query(collection(db, "cartItems"), where("userId", "==", user.uid));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const items: any[] = [];
-      snapshot.forEach((snap) => {
-        items.push({ id: snap.id, ...snap.data() });
-      });
-      setCart(items);
-    }, (error) => {
-      console.error("Cart subscription failed: ", error);
-    });
-    return () => unsubscribe();
+
+    if (user.uid === "demo_admin_uid" || user.uid === "demo_student_uid") {
+      try {
+        const local = localStorage.getItem("demo_cart");
+        if (local) {
+          setCart(JSON.parse(local));
+        } else {
+          setCart([]);
+        }
+      } catch (_) {}
+      return;
+    }
+
+    // ── FIXED: One-time getDocs instead of persistent onSnapshot ──
+    let cancelled = false;
+
+    async function fetchCart() {
+      try {
+        const { getDocs } = await import("firebase/firestore");
+        const snap = await getDocs(query(collection(db, "cartItems"), where("userId", "==", user!.uid)));
+        if (cancelled) return;
+        const items: any[] = [];
+        snap.forEach((s) => items.push({ id: s.id, ...s.data() }));
+        setCart(items);
+      } catch (err: any) {
+        if (cancelled) return;
+        const isQuota = err?.message?.toLowerCase().includes("quota") || err?.message?.toLowerCase().includes("resource_exhausted");
+        if (isQuota) {
+          console.warn("[AppContext] Cart fetch quota exceeded:", err);
+          setIsQuotaExceeded(true);
+        } else {
+          console.error("[AppContext] Cart fetch error:", err);
+        }
+      }
+    }
+
+    fetchCart();
+    return () => { cancelled = true; };
   }, [user]);
 
   const isSetupComplete = () => {
@@ -766,6 +864,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return false;
     }
 
+    if (user.uid === "demo_admin_uid" || user.uid === "demo_student_uid") {
+      const existingItem = cart.find(item => item.productId === course.id);
+      let updatedCart: any[] = [];
+      if (existingItem) {
+        updatedCart = cart.map(item =>
+          item.productId === course.id
+            ? { ...item, quantity: (item.quantity || 1) + 1 }
+            : item
+        );
+        showToast("Product already added to cart.", "info");
+      } else {
+        const newItem = {
+          id: "cart_sim_" + Date.now().toString(),
+          userId: user.uid,
+          userEmail: user.email || "",
+          productId: course.id,
+          productTitle: course.title,
+          productCategory: course.category || "General",
+          productImage: course.thumbnail || "",
+          price: Number(course.price || 0),
+          quantity: 1,
+          addedAt: new Date()
+        };
+        updatedCart = [...cart, newItem];
+        showToast("Added to cart successfully", "success");
+      }
+      setCart(updatedCart);
+      localStorage.setItem("demo_cart", JSON.stringify(updatedCart));
+      // Log User Activities (View, Add to Cart)
+      await logUserActivity("Add To Cart", `Added To Cart: ${course.title} (₹${course.price})`);
+      return true;
+    }
+
     try {
       const existingItem = cart.find(item => item.productId === course.id);
       if (existingItem) {
@@ -774,10 +905,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           quantity: (existingItem.quantity || 1) + 1,
           addedAt: serverTimestamp()
         }, { merge: true });
+        // Optimistic local update (no onSnapshot anymore)
+        setCart(prev => prev.map(item =>
+          item.id === existingItem.id ? { ...item, quantity: (item.quantity || 1) + 1 } : item
+        ));
         showToast("Product already added to cart.", "info");
       } else {
         const cartItemRef = doc(collection(db, "cartItems"));
-        await setDoc(cartItemRef, {
+        const newItem = {
           id: cartItemRef.id,
           userId: user!.uid,
           userEmail: user!.email || "",
@@ -788,11 +923,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           price: Number(course.price || 0),
           quantity: 1,
           addedAt: serverTimestamp()
-        });
+        };
+        await setDoc(cartItemRef, newItem);
+        // Optimistic local update
+        setCart(prev => [...prev, { ...newItem, addedAt: new Date() }]);
         showToast("Added to cart successfully", "success");
       }
       
-      // Log User Activities (View, Add to Cart)
       await logUserActivity("Add To Cart", `Added To Cart: ${course.title} (₹${course.price})`);
       
       const userRef = doc(db, "users", user!.uid);
@@ -809,12 +946,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const removeFromCart = async (cartItemId: string) => {
     if (!user) return;
+
+    if (user.uid === "demo_admin_uid" || user.uid === "demo_student_uid") {
+      const item = cart.find(x => x.id === cartItemId);
+      if (item) {
+        await logUserActivity("Remove From Cart", `Removed From Cart: ${item.productTitle}`);
+      }
+      const updatedCart = cart.filter(x => x.id !== cartItemId);
+      setCart(updatedCart);
+      localStorage.setItem("demo_cart", JSON.stringify(updatedCart));
+      return;
+    }
+
     try {
       const item = cart.find(x => x.id === cartItemId);
       if (item) {
         await logUserActivity("Remove From Cart", `Removed From Cart: ${item.productTitle}`);
       }
       await deleteDoc(doc(db, "cartItems", cartItemId));
+      // Optimistic local update
+      setCart(prev => prev.filter(x => x.id !== cartItemId));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `cartItems/${cartItemId}`);
     }
@@ -826,6 +977,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await removeFromCart(cartItemId);
       return;
     }
+
+    if (user.uid === "demo_admin_uid" || user.uid === "demo_student_uid") {
+      const updatedCart = cart.map(item =>
+        item.id === cartItemId ? { ...item, quantity: Number(quantity) } : item
+      );
+      setCart(updatedCart);
+      localStorage.setItem("demo_cart", JSON.stringify(updatedCart));
+      return;
+    }
+
     try {
       await setDoc(doc(db, "cartItems", cartItemId), {
         quantity: Number(quantity),
@@ -838,6 +999,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const clearCart = async () => {
     if (!user) return;
+
+    if (user.uid === "demo_admin_uid" || user.uid === "demo_student_uid") {
+      setCart([]);
+      localStorage.removeItem("demo_cart");
+      return;
+    }
+
     try {
       for (const item of cart) {
         await deleteDoc(doc(db, "cartItems", item.id));
@@ -979,7 +1147,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         selectedCourseSlug,
         setSelectedCourseSlug,
         selectedStudentUsername,
-        setSelectedStudentUsername
+        setSelectedStudentUsername,
+        isQuotaExceeded,
+        setIsQuotaExceeded
       }}
     >
       {children}

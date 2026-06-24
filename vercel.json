@@ -2,6 +2,18 @@
   "cleanUrls": true,
   "rewrites": [
     {
+      "source": "/api/pay/create-order",
+      "destination": "/api/pay/create-order"
+    },
+    {
+      "source": "/api/pay/verify-payment",
+      "destination": "/api/pay/verify-payment"
+    },
+    {
+      "source": "/api/pay/webhook",
+      "destination": "/api/pay/webhook"
+    },
+    {
       "source": "/sitemap.xml",
       "destination": "/api/sitemap"
     },
@@ -9,5 +21,19 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ]
+  ],
+  "functions": {
+    "api/pay/create-order.js": {
+      "maxDuration": 30
+    },
+    "api/pay/verify-payment.js": {
+      "maxDuration": 30
+    },
+    "api/pay/webhook.js": {
+      "maxDuration": 30
+    },
+    "api/sitemap.js": {
+      "maxDuration": 30
+    }
+  }
 }

@@ -43,6 +43,7 @@ export const CartPage: React.FC = () => {
     country: dbUser?.country || "India"
   });
   const [formError, setFormError] = useState("");
+  const [selectedProductForPopup, setSelectedProductForPopup] = useState<any | null>(null);
 
   // Dynamic state for automated checkout tracking
   const [uploadError, setUploadError] = useState("");
@@ -262,56 +263,16 @@ export const CartPage: React.FC = () => {
     logUserActivity("Checkout Initiated", `Began Checkout for ${cart.length} items totaling ₹${finalCost}`);
   };
 
-  // Write confirmed order and courses to database on behalf of the signed-in user
+  // SECURITY FIX: Server-side verify-payment already writes to Firestore via REST API.
+  // This function now only updates local UI state — no duplicate client-side Firestore writes.
   const logTransactionDirectlyToDb = async (orderId: string, paymentId: string, gatewayOrderId: string) => {
-    if (!user) {
-      console.warn("[CHECKOUT-CLIENT] Cannot write database logs directly: User session is missing.");
-      return;
-    }
+    if (!user) return;
+    // Server has already written orders + userPurchases via verify-payment serverless function.
+    // We just log the activity locally.
     try {
-      const orderPayload: any = {
-        name: checkoutForm.name,
-        buyerName: checkoutForm.name,
-        email: user.email || checkoutForm.email,
-        telegram: checkoutForm.telegram || "N/A",
-        telegramUsername: checkoutForm.telegram || "N/A",
-        courseId: cart[0]?.productId || "multiple_items",
-        courseName: cart.length > 1 ? `${cart.length} Courses Bundle` : (cart[0]?.productTitle || "Digital Training Program"),
-        price: Number(finalCost || 0),
-        originalPrice: Number(cartSubtotal || 0),
-        discountApplied: Number(discountAmount || 0),
-        couponCode: appliedCoupon || "None",
-        screenshotUrl: "Razorpay Auto-Approved Gateway",
-        proofImage: "Razorpay Auto-Approved Gateway",
-        status: "Verified",
-        userId: user.uid,
-        paymentType: "Razorpay Gateway",
-        razorpayOrderId: gatewayOrderId,
-        razorpayPaymentId: paymentId,
-        createdAt: serverTimestamp(),
-      };
-
-      await setDoc(doc(db, "orders", orderId), orderPayload);
-
-      for (const item of cart) {
-        const purchaseId = "pur_rzp_" + Date.now().toString().substring(4) + Math.random().toString(36).substring(3, 7);
-        const purchasePayload = {
-          userId: user.uid,
-          productId: item.productId,
-          productTitle: item.productTitle,
-          productImage: item.productImage || "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=800",
-          purchaseDate: new Date().toISOString(),
-          deliveryUrl: "https://t.me/LearntoFuture",
-          orderId: orderId,
-          status: "Delivered"
-        };
-        await setDoc(doc(db, "userPurchases", purchaseId), purchasePayload);
-      }
-      console.log("[CHECKOUT-CLIENT] Database records committed successfully under authenticated authority.");
-    } catch (writeErr) {
-      console.error("[CHECKOUT-CLIENT] Primary direct write failed under rules authority:", writeErr);
-      throw writeErr;
-    }
+      await logUserActivity("Purchase Complete", `Order ${orderId} enrolled via Razorpay (${paymentId})`);
+    } catch (_) {}
+    console.log("[CHECKOUT-CLIENT] Server wrote enrollment records. Client-side duplicate write skipped (security fix).");
   };
 
   // Trigger automatic check out verification for sandbox mode
@@ -396,6 +357,21 @@ export const CartPage: React.FC = () => {
     }
   };
 
+  const loadRazorpayScript = () => {
+    return new Promise<boolean>((resolve) => {
+      if ((window as any).Razorpay) {
+        resolve(true);
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
   // Automated razorpay checkout sequence triggering order generation and signature audit
   const triggerRazorpayPayment = async () => {
     setUploadError("");
@@ -414,23 +390,29 @@ export const CartPage: React.FC = () => {
           buyerName: checkoutForm.name,
           email: checkoutForm.email,
           telegram: checkoutForm.telegram,
-          couponCode: appliedCoupon || "None"
+          couponCode: appliedCoupon || "None",
+          cartItems: cart.map(item => ({
+            productId: item.productId,
+            productTitle: item.productTitle,
+            productImage: item.productImage,
+            price: item.price
+          }))
         })
       });
 
       if (!response.ok) {
         let errMsg = "Failed to establish payment gateway session. Please verify details and retry.";
         try {
-          const errData = await response.json();
-          errMsg = errData.error || errMsg;
-        } catch (_) {
+          const rawText = await response.text();
           try {
-            const rawText = await response.text();
+            const errData = JSON.parse(rawText);
+            errMsg = errData.error || errMsg;
+          } catch (_) {
             if (rawText) {
-              errMsg = `${errMsg} (${rawText.substring(0, 100)})`;
+              errMsg = `${errMsg} (${rawText.substring(0, 150)})`;
             }
-          } catch (__) {}
-        }
+          }
+        } catch (_) {}
         throw new Error(errMsg);
       }
 
@@ -450,9 +432,17 @@ export const CartPage: React.FC = () => {
       }
 
       // 2. Load standard official Razorpay interactive overlay popup in window
-      if (!(window as any).Razorpay) {
-        console.warn("Razorpay SDK not found in browser. Activating seamless sandbox checkout fallback...");
-        setSimulatedOrder({ ...orderData, isSimulated: true });
+      const isScriptLoaded = await loadRazorpayScript();
+      if (!isScriptLoaded || !(window as any).Razorpay) {
+        console.warn("Razorpay SDK not found in browser.");
+        if (orderData.isSimulated) {
+          console.log("Activating sandbox payment UI as requested by backend...");
+          setSimulatedOrder({ ...orderData, isSimulated: true });
+        } else {
+          setUploadError(
+            "Razorpay Secure Checkout could not be loaded. This typically happens if you are in a sandboxed iframe, your internet connection is restricted, or your browser is running an adblocker block list. Please open the school in a new browser tab or use the 'Manual UPI QR' tab to pay directly."
+          );
+        }
         setSubmittingOrder(false);
         return;
       }
@@ -559,20 +549,23 @@ export const CartPage: React.FC = () => {
         const rzpInstance = new (window as any).Razorpay(options);
         rzpInstance.open();
       } catch (innerRzpError: any) {
-        console.warn("Razorpay dynamic launch blocked or failed. Activating local payment Simulator fallback...", innerRzpError);
-        setSimulatedOrder({ ...orderData, isSimulated: true });
+        console.warn("Razorpay dynamic launch blocked or failed.", innerRzpError);
+        if (orderData.isSimulated) {
+          console.log("Activating sandbox payment UI as requested by backend...");
+          setSimulatedOrder({ ...orderData, isSimulated: true });
+        } else {
+          setUploadError(
+            `Razorpay checkout interface could not be launched: ${innerRzpError.message || innerRzpError}. Please disable any adblocker extension or privacy block list, refresh the page, and try again.`
+          );
+        }
         setSubmittingOrder(false);
       }
 
     } catch (paymentErr: any) {
-      console.error("Razorpay initiation error, executing local simulator fallback:", paymentErr);
-      // Fallback gracefully rather than crashing the interface
-      setSimulatedOrder({
-        id: "order_sim_" + Date.now().toString().substring(4) + Math.random().toString(36).substring(3, 7),
-        amount: Math.round(Number(finalCost) * 100),
-        currency: "INR",
-        isSimulated: true
-      });
+      console.error("Razorpay initiation error:", paymentErr);
+      setUploadError(
+        paymentErr.message || "An unexpected error occurred while communicating with the checkout gateway."
+      );
       setSubmittingOrder(false);
     }
   };
@@ -808,10 +801,15 @@ export const CartPage: React.FC = () => {
             
             {/* List items block */}
             <div className="lg:col-span-2 space-y-4">
-              <span className="text-[10px] font-mono tracking-widest text-[#999] uppercase">CART ITEMS ({cart.length})</span>
+              <span className="text-[10px] font-mono tracking-widest text-[#999] uppercase">CART ITEMS ({cart.length}) &nbsp;•&nbsp; <span className="text-brand-gold">Click any card to view instant payment details</span></span>
               <div className="space-y-3.5">
                 {cart.map((item) => (
-                  <div key={item.id} className="bg-[#0b0b0b] border border-neutral-900 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center relative group hover:border-brand-gold/20 transition-colors">
+                  <div 
+                    key={item.id} 
+                    onClick={() => setSelectedProductForPopup(item)}
+                    className="bg-[#0b0b0b] border border-neutral-900 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center relative group hover:border-brand-gold/40 transition-colors cursor-pointer select-none"
+                    title="Click card to view details and payment details"
+                  >
                     <div className="flex gap-4 items-center min-w-0">
                       <div className="w-16 h-16 rounded-xl overflow-hidden bg-neutral-900 shrink-0 border border-neutral-850">
                         <img src={item.productImage} alt={item.productTitle} className="w-full h-full object-cover" />
@@ -828,7 +826,10 @@ export const CartPage: React.FC = () => {
                       {/* Quantity switcher */}
                       <div className="flex items-center gap-1.5 bg-black/45 border border-neutral-850 p-1.5 rounded-xl text-xs font-mono">
                         <button 
-                          onClick={() => updateCartQuantity(item.id, (item.quantity || 1) - 1)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            updateCartQuantity(item.id, (item.quantity || 1) - 1);
+                          }}
                           className="p-1 hover:bg-neutral-800 text-neutral-400 rounded transition-colors"
                           title="Reduce quantity by 1"
                         >
@@ -836,7 +837,10 @@ export const CartPage: React.FC = () => {
                         </button>
                         <span className="w-6 text-center text-white font-bold">{item.quantity || 1}</span>
                         <button 
-                          onClick={() => updateCartQuantity(item.id, (item.quantity || 1) + 1)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            updateCartQuantity(item.id, (item.quantity || 1) + 1);
+                          }}
                           className="p-1 hover:bg-neutral-800 text-neutral-400 rounded transition-colors"
                           title="Increase quantity by 1"
                         >
@@ -847,7 +851,10 @@ export const CartPage: React.FC = () => {
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-mono font-extrabold text-neutral-200">₹{(Number(item.price) * (item.quantity || 1)).toLocaleString("en-IN")}</span>
                         <button 
-                          onClick={() => removeFromCart(item.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeFromCart(item.id);
+                          }}
                           className="p-2 bg-neutral-900 hover:bg-red-950/30 text-neutral-400 hover:text-red-400 border border-neutral-850 rounded-xl transition-all"
                           title="Remove item from checkout"
                         >
@@ -1440,6 +1447,114 @@ export const CartPage: React.FC = () => {
             </div>
           </div>
         )}
+
+      {/* Click-to-pay Product Details Popup Modal */}
+      {selectedProductForPopup && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto animate-fadeIn select-none">
+          <div className="bg-[#0b0b0b] border border-neutral-900 rounded-3xl p-6 sm:p-8 max-w-sm w-full relative space-y-5 shadow-2xl animate-scaleIn text-left">
+            
+            {/* Header */}
+            <div className="flex justify-between items-start border-b border-neutral-900 pb-3">
+              <div>
+                <span className="text-[9px] font-mono tracking-widest text-brand-gold uppercase">Product Summary</span>
+                <h3 className="text-base font-display font-extrabold text-white mt-1">Payment Details</h3>
+              </div>
+              <button 
+                onClick={() => setSelectedProductForPopup(null)}
+                className="text-neutral-400 hover:text-white p-1.5 bg-neutral-950 border border-neutral-850 rounded-xl transition-all cursor-pointer"
+                title="Close overlay"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Product Basic Details */}
+            <div className="flex gap-3.5 items-center bg-black/50 border border-neutral-850 p-3.5 rounded-2xl">
+              <div className="w-12 h-12 rounded-xl overflow-hidden bg-neutral-950 shrink-0 border border-neutral-800">
+                <img src={selectedProductForPopup.productImage} alt={selectedProductForPopup.productTitle} className="w-full h-full object-cover animate-pulse" referrerPolicy="no-referrer" />
+              </div>
+              <div className="min-w-0">
+                <span className="inline-block text-[8px] font-mono tracking-wide text-brand-gold bg-brand-gold/10 px-2 py-0.5 rounded-full border border-brand-gold/10 uppercase">
+                  {selectedProductForPopup.productCategory || "Online Course"}
+                </span>
+                <h4 className="text-xs font-bold text-white truncate max-w-[180px] mt-1">{selectedProductForPopup.productTitle}</h4>
+                <p className="text-[10px] text-neutral-450 mt-1 font-mono">Rate: ₹{Number(selectedProductForPopup.price).toLocaleString("en-IN")}</p>
+              </div>
+            </div>
+
+            {/* Mobile number section */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <label className="block text-[9px] text-neutral-400 uppercase tracking-widest font-mono font-bold">
+                  Student Mobile Number *
+                </label>
+                {checkoutForm.mobile && checkoutForm.mobile.length === 10 && (
+                  <span className="text-[8px] font-mono text-emerald-400 uppercase font-bold">✓ Valid Ready</span>
+                )}
+              </div>
+              <input 
+                type="tel"
+                placeholder="Enter 10-digit mobile number"
+                value={checkoutForm.mobile}
+                onChange={(e) => setCheckoutForm({...checkoutForm, mobile: e.target.value})}
+                className="bg-black border border-neutral-850 rounded-xl px-3.5 py-3 text-xs font-mono outline-none focus:border-brand-gold w-full text-white tracking-widest"
+              />
+              <p className="text-[8px] text-neutral-500 font-mono leading-normal">
+                Course dispatches and student registration credentials will be bound to this telephone contact.
+              </p>
+            </div>
+
+            {/* Payment Details block */}
+            <div className="bg-neutral-950 border border-neutral-900 p-3.5 rounded-xl space-y-2 font-mono text-[10.5px]">
+              <div className="flex justify-between">
+                <span className="text-neutral-500 uppercase">Per Item Rate:</span>
+                <span className="text-neutral-300">₹{Number(selectedProductForPopup.price).toLocaleString("en-IN")}</span>
+              </div>
+              <div className="flex justify-between border-b border-neutral-900 pb-1.5 mb-1.5">
+                <span className="text-neutral-500 uppercase">Quantity:</span>
+                <span className="text-neutral-300">{selectedProductForPopup.quantity || 1} Courses</span>
+              </div>
+              {appliedCoupon && (
+                <div className="flex justify-between text-yellow-500 text-[10px]">
+                  <span className="uppercase">Coupon code:</span>
+                  <span className="font-bold">{appliedCoupon} (-₹{Math.round(discountAmount).toLocaleString("en-IN")})</span>
+                </div>
+              )}
+              <div className="flex justify-between text-brand-gold font-bold">
+                <span className="uppercase">Final Payable:</span>
+                <span className="text-xs font-extrabold">
+                  ₹{Math.max(0, (Number(selectedProductForPopup.price) * (selectedProductForPopup.quantity || 1)) - (appliedCoupon ? Math.round(discountAmount) : 0)).toLocaleString("en-IN")}
+                </span>
+              </div>
+            </div>
+
+            {/* Trigger Checkout directly */}
+            <div className="pt-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!checkoutForm.mobile.trim()) {
+                    alert("Please specify a contact mobile number to proceed to instant checkout!");
+                    return;
+                  }
+                  if (checkoutForm.mobile.trim().length < 10) {
+                    alert("Please input a valid 10-digit contact phone number!");
+                    return;
+                  }
+                  // Prefill coordinates and route directly to payment options with automatic launching
+                  setSelectedProductForPopup(null);
+                  setCheckoutStep("payment");
+                }}
+                className="w-full bg-brand-gold hover:bg-[#ffd34d] text-black font-mono font-bold text-xs uppercase tracking-widest py-3.5 rounded-xl transition shadow flex items-center justify-center gap-1.5 cursor-pointer hover:scale-[1.01]"
+              >
+                <CreditCard className="w-4 h-4 text-black animate-pulse" />
+                <span>Pay via Instant Gateway</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       </div>
     </div>
