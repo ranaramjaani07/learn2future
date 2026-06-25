@@ -2602,6 +2602,72 @@ export const AdminDashboard: React.FC = () => {
               }
             }
           }
+
+          // Synchronize userPurchases (enrollment) based on active/inactive transition
+          if (wasActivePaid && !isActivePaid) {
+            try {
+              const qPurchases = query(collection(db, "userPurchases"), where("orderId", "==", orderId));
+              const purchasesSnap = await getDocs(qPurchases);
+              const deletePromises = purchasesSnap.docs.map(pDoc => deleteDoc(doc(db, "userPurchases", pDoc.id)));
+              await Promise.all(deletePromises);
+              console.log(`[ORDER-STATUS-SYNC] Deleted ${deletePromises.length} associated userPurchases documents.`);
+            } catch (pDelErr) {
+              console.warn("Failed to delete userPurchases on order status update:", pDelErr);
+            }
+          } else if (!wasActivePaid && isActivePaid) {
+            try {
+              const userId = orderData.userId || "";
+              const courseId = orderData.courseId || "";
+              const purchasedCourses = orderData.purchasedCourses || [];
+              const productIds = purchasedCourses.length > 0 ? purchasedCourses : [courseId];
+
+              for (const pid of productIds) {
+                if (!pid || pid === "multiple_items") continue;
+
+                // Check if they already have userPurchases to prevent duplicates
+                const dupCheck = query(
+                  collection(db, "userPurchases"),
+                  where("userId", "==", userId),
+                  where("productId", "==", pid)
+                );
+                const dupSnap = await getDocs(dupCheck);
+                if (!dupSnap.empty) {
+                  console.log(`[ORDER-STATUS-SYNC] Already enrolled in ${pid}, skipping.`);
+                  continue;
+                }
+
+                // Fetch course info for title, thumbnail and deliveryUrl
+                let deliveryUrl = "https://t.me/LearntoFuture";
+                let thumbnail = "";
+                let title = "";
+                try {
+                  const courseSnap = await getDoc(doc(db, "courses", pid));
+                  if (courseSnap.exists()) {
+                    const cData = courseSnap.data();
+                    deliveryUrl = cData.deliveryUrl || cData.deliveryLink || deliveryUrl;
+                    thumbnail = cData.thumbnail || cData.coverImage || "";
+                    title = cData.title || "";
+                  }
+                } catch (_) {}
+
+                const purchaseId = "pur_admin_" + Date.now().toString().slice(-7) + Math.random().toString(36).slice(2, 6);
+                await setDoc(doc(db, "userPurchases", purchaseId), {
+                  userId,
+                  productId: pid,
+                  productTitle: title || orderData.courseName || "Premium Course",
+                  productImage: thumbnail || "",
+                  purchaseDate: new Date().toISOString(),
+                  deliveryUrl,
+                  orderId,
+                  razorpayPaymentId: orderData.razorpayPaymentId || "Admin Approved",
+                  status: "Delivered"
+                });
+                console.log(`[ORDER-STATUS-SYNC] Created userPurchase enrollment for ${pid}`);
+              }
+            } catch (pInsErr) {
+              console.error("Failed to insert userPurchases on order status update:", pInsErr);
+            }
+          }
         }
       } catch (couponCountErr) {
         console.error("Failed to adjust coupon usage metrics on order status transition:", couponCountErr);
@@ -2701,6 +2767,18 @@ export const AdminDashboard: React.FC = () => {
       }
 
       await deleteDoc(docRef);
+
+      // Also find and delete any associated userPurchases documents so enrollment gets cleared
+      try {
+        const qPurchases = query(collection(db, "userPurchases"), where("orderId", "==", orderId));
+        const purchasesSnap = await getDocs(qPurchases);
+        const deletePromises = purchasesSnap.docs.map(pDoc => deleteDoc(doc(db, "userPurchases", pDoc.id)));
+        await Promise.all(deletePromises);
+        console.log(`[ORDER-DELETION] Deleted ${deletePromises.length} associated userPurchases documents.`);
+      } catch (purchaseDelErr) {
+        console.warn("Failed to delete associated userPurchases:", purchaseDelErr);
+      }
+
       await fetchAllAdminData();
     } catch (e: any) {
       console.error("Firebase delete order error:", e);

@@ -813,7 +813,10 @@ ${course.title}
               <div className="aspect-video relative bg-neutral-900 overflow-hidden shrink-0">
                 <img 
                   src={course.thumbnail || null} 
-                  alt={course.title}
+                  alt={`Course image for ${course.title} - ${course.category} educational training blueprint`}
+                  width="640"
+                  height="360"
+                  loading="lazy"
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   onError={(e)=>{
                     (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=800";
@@ -1406,7 +1409,10 @@ ${course.title}
             <div className="flex gap-3 p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-900/40 border border-neutral-200/50 dark:border-brand-border/40 mb-6">
               <img 
                 src={courseToShare.thumbnail || null} 
-                alt={courseToShare.title}
+                alt={`Mini thumbnail for sharing the course: ${courseToShare.title}`}
+                width="64"
+                height="48"
+                loading="lazy"
                 className="w-16 h-12 object-cover rounded-lg border border-neutral-200/30 dark:border-brand-border/20 shrink-0"
               />
               <div className="min-w-0">

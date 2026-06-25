@@ -1,69 +1,115 @@
+// api/pay/create-order.js - Vercel Serverless Function
+// Handles Razorpay order creation with Firestore duplicate checks via REST API
+
 import Razorpay from "razorpay";
-import { CONFIG } from "../_config.js";
+import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 
-// ── Firebase REST helpers ─────────────────────────────────
-const BASE_URL = `https://firestore.googleapis.com/v1/projects/${CONFIG.FIREBASE_PROJECT_ID}/databases/${CONFIG.FIREBASE_DATABASE_ID}/documents`;
+// ──────────────────────────────────────────────
+// FIRESTORE REST ENGINE (no firebase-admin needed on Vercel)
+// ──────────────────────────────────────────────
+function getFirebaseConfig() {
+  // Priority: env vars → JSON file
+  if (process.env.FIREBASE_PROJECT_ID) {
+    return {
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      databaseId: process.env.FIREBASE_FIRESTORE_DATABASE_ID || "(default)",
+      apiKey: process.env.FIREBASE_API_KEY || "",
+    };
+  }
+  try {
+    const jsonPath = path.join(process.cwd(), "firebase-applet-config.json");
+    if (fs.existsSync(jsonPath)) {
+      const cfg = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
+      return {
+        projectId: cfg.projectId,
+        databaseId: cfg.firestoreDatabaseId || "(default)",
+        apiKey: cfg.apiKey || "",
+      };
+    }
+  } catch (_) {}
+  return { projectId: "", databaseId: "(default)", apiKey: "" };
+}
 
-function decodeValue(val) {
+const fbConfig = getFirebaseConfig();
+const BASE_URL = `https://firestore.googleapis.com/v1/projects/${fbConfig.projectId}/databases/${fbConfig.databaseId}/documents`;
+
+function decodeProtoValue(val) {
   if (!val) return null;
   if ("stringValue" in val) return val.stringValue;
   if ("integerValue" in val) return Number(val.integerValue);
   if ("doubleValue" in val) return Number(val.doubleValue);
   if ("booleanValue" in val) return val.booleanValue;
   if ("nullValue" in val) return null;
-  if ("arrayValue" in val) return (val.arrayValue.values || []).map(decodeValue);
+  if ("timestampValue" in val) return val.timestampValue;
+  if ("arrayValue" in val) return (val.arrayValue.values || []).map(decodeProtoValue);
   if ("mapValue" in val) return fromProto(val.mapValue.fields || {});
   return null;
 }
+
 function fromProto(fields) {
   const obj = {};
-  for (const [k, v] of Object.entries(fields || {})) obj[k] = decodeValue(v);
+  for (const [k, v] of Object.entries(fields || {})) obj[k] = decodeProtoValue(v);
   return obj;
 }
 
-async function firestoreGet(collection, docId) {
+async function firestoreQuery(collection, filters) {
   try {
-    const res = await fetch(`${BASE_URL}/${collection}/${docId}?key=${CONFIG.FIREBASE_API_KEY}`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.fields ? fromProto(data.fields) : null;
-  } catch (_) { return null; }
-}
-
-async function firestoreQuery(col, filters) {
-  try {
-    const where = filters.map(({ field, value }) => ({
+    const where = filters.map(({ field, op, value }) => ({
       fieldFilter: {
         field: { fieldPath: field },
-        op: "EQUAL",
-        value: { stringValue: value },
+        op: op === "==" ? "EQUAL" : op,
+        value: typeof value === "string" ? { stringValue: value } : { integerValue: String(value) },
       },
     }));
+
     const body = {
       structuredQuery: {
-        from: [{ collectionId: col }],
+        from: [{ collectionId: collection }],
         where: where.length === 1 ? where[0] : { compositeFilter: { op: "AND", filters: where } },
       },
     };
-    const res = await fetch(`${BASE_URL}:runQuery?key=${CONFIG.FIREBASE_API_KEY}`, {
+
+    const res = await fetch(`${BASE_URL}:runQuery?key=${fbConfig.apiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+
     if (!res.ok) return [];
     const rows = await res.json();
-    return (rows || []).filter(r => r.document).map(r => ({
-      id: r.document.name.split("/").pop(),
-      ...fromProto(r.document.fields)
-    }));
-  } catch (_) { return []; }
+    return (rows || [])
+      .filter((r) => r.document)
+      .map((r) => ({ id: r.document.name.split("/").pop(), ...fromProto(r.document.fields) }));
+  } catch (_) {
+    return [];
+  }
 }
 
-// ── Main Handler ─────────────────────────────────────────
+async function firestoreGet(collection, docId) {
+  try {
+    const res = await fetch(`${BASE_URL}/${collection}/${docId}?key=${fbConfig.apiKey}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.fields) return null;
+    return fromProto(data.fields);
+  } catch (_) {
+    return null;
+  }
+}
+
+// ──────────────────────────────────────────────
+// DEFAULT KEYS (test/sandbox only)
+// ──────────────────────────────────────────────
+const DEFAULT_KEY_ID = "rzp_test_T3sKohSHme4Sfk";
+
 export default async function handler(req, res) {
+  // CORS for client-side fetch
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
@@ -71,67 +117,72 @@ export default async function handler(req, res) {
     const { courseId, amount, userId, buyerName, email, telegram, couponCode, cartItems } = req.body || {};
 
     if (!courseId || !amount || !userId) {
-      return res.status(400).json({ error: "courseId, amount, userId required." });
+      return res.status(400).json({ error: "courseId, amount, and userId are required." });
     }
 
-    // Config se keys lo (env var fallback bhi hai)
-    const keyId     = process.env.RAZORPAY_KEY_ID     || CONFIG.RAZORPAY_KEY_ID;
-    const keySecret = process.env.RAZORPAY_KEY_SECRET  || CONFIG.RAZORPAY_KEY_SECRET;
-    const paymentEnv = process.env.PAYMENT_ENV         || CONFIG.PAYMENT_ENV;
+    // ── Fetch payment settings from Firestore ──
+    const paySettings = await firestoreGet("settings", "paymentGateway");
+    const keyId = paySettings?.razorpayKeyId || process.env.RAZORPAY_KEY_ID || DEFAULT_KEY_ID;
+    const keySecret = paySettings?.razorpayKeySecret || process.env.RAZORPAY_KEY_SECRET || "";
 
-    const isPlaceholder = keyId.includes("APNI_KEY") || keyId === "rzp_test_T3sKohSHme4Sfk";
-    const isProduction  = paymentEnv === "PRODUCTION";
-
-    // Duplicate enrollment check
-    const productIds = Array.isArray(cartItems) ? cartItems.map(i => i.productId) : [courseId];
-    if (userId !== "anonymous") {
-      for (const pid of productIds) {
-        if (pid === "multiple_items") continue;
-        const existing = await firestoreQuery("userPurchases", [
-          { field: "userId", value: userId },
-          { field: "productId", value: pid },
-        ]);
-        if (existing.length > 0) {
-          return res.status(400).json({ error: `Aap pehle se is course ke owner hain! My Enrollments mein check karein.` });
-        }
-      }
+    if (!keyId || !keySecret) {
+      return res.status(400).json({
+        error: "Razorpay credentials not configured. Please set them in Admin → Settings → Payment Gateway.",
+      });
     }
 
-    // Real Razorpay order
-    if (!isPlaceholder && keySecret && !keySecret.includes("APNI_SECRET")) {
+    const isPlaceholderKey = keyId === DEFAULT_KEY_ID;
+    const PAYMENT_ENV = process.env.PAYMENT_ENV || "DEVELOPMENT";
+    const isProduction = PAYMENT_ENV === "PRODUCTION";
+
+    // ── Duplicate enrollment check ── DELETED AS PER USER REQUEST TO ALLOW BUYING MULTIPLE TIMES
+
+    // ── Try real Razorpay first, fall back to simulator in dev ──
+    let order;
+    let isSimulated = false;
+
+    if (!isPlaceholderKey) {
+      // Real Razorpay
       try {
         let RazorpayClass = Razorpay;
-        if (Razorpay?.default) RazorpayClass = Razorpay.default;
+        if (Razorpay && Razorpay.default) RazorpayClass = Razorpay.default;
         const rzp = new RazorpayClass({ key_id: keyId, key_secret: keySecret });
-        const order = await rzp.orders.create({
+        order = await rzp.orders.create({
           amount: Math.round(Number(amount) * 100),
           currency: "INR",
           receipt: "rcpt_" + Date.now().toString().slice(-8),
-          notes: { courseId, userId, couponCode: couponCode || "None", buyerName: buyerName || "", email: email || "" },
-        });
-        return res.status(200).json({
-          id: order.id, amount: order.amount, currency: order.currency,
-          key_id: keyId, isSimulated: false, paymentEnv,
+          notes: { courseId, userId, couponCode: couponCode || "None", buyerName: buyerName || "", email: email || "", telegram: telegram || "" },
         });
       } catch (rzpErr) {
-        return res.status(500).json({ error: `Razorpay error: ${rzpErr?.message || "Gateway unavailable"}` });
+        console.error("[create-order] Razorpay API error:", rzpErr?.message || rzpErr);
+        return res.status(500).json({
+          error: `Razorpay error: ${rzpErr?.message || "Gateway unavailable. Check your API credentials."}`,
+        });
       }
-    }
-
-    // Simulation (only in DEVELOPMENT)
-    if (!isProduction) {
-      const simOrder = {
+    } else if (!isProduction) {
+      // Sandbox simulation in dev/staging
+      isSimulated = true;
+      order = {
         id: "order_sim_" + Date.now().toString().slice(-8) + Math.random().toString(36).slice(2, 6),
         amount: Math.round(Number(amount) * 100),
         currency: "INR",
       };
-      return res.status(200).json({ ...simOrder, key_id: keyId, isSimulated: true, paymentEnv });
+    } else {
+      return res.status(400).json({
+        error: "Sandbox is disabled in PRODUCTION. Please configure real Razorpay credentials in Admin Settings.",
+      });
     }
 
-    return res.status(400).json({ error: "Razorpay credentials configure nahi hain. Admin Settings mein real keys daalo." });
-
+    return res.status(200).json({
+      id: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      key_id: keyId,
+      isSimulated,
+      paymentEnv: PAYMENT_ENV,
+    });
   } catch (err) {
-    console.error("[create-order] Error:", err);
-    return res.status(500).json({ error: err?.message || "Internal server error" });
+    console.error("[create-order] Unexpected error:", err);
+    return res.status(500).json({ error: err?.message || "Internal server error." });
   }
 }

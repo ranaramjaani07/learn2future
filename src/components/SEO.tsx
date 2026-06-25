@@ -11,6 +11,9 @@ interface SEOProps {
   publishDate?: string;
   canonicalUrl?: string;
   type?: "website" | "article" | "course";
+  faqs?: { question: string; answer: string }[];
+  reviews?: { author: string; rating: number; body: string }[];
+  breadcrumbs?: { name: string; item: string }[];
 }
 
 export const SEO: React.FC<SEOProps> = ({
@@ -23,6 +26,9 @@ export const SEO: React.FC<SEOProps> = ({
   publishDate,
   canonicalUrl,
   type = "website",
+  faqs,
+  reviews,
+  breadcrumbs,
 }) => {
   useDocumentMetadata({
     title,
@@ -34,6 +40,9 @@ export const SEO: React.FC<SEOProps> = ({
     publishDate,
     canonicalUrl,
     type,
+    faqs,
+    reviews,
+    breadcrumbs,
   });
 
   return null; // Side-effect only component

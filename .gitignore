@@ -6,6 +6,3 @@ coverage/
 *.log
 .env*
 !.env.example
-
-# Secret config file — KABHI GIT PE MAT DALO
-api/_config.js

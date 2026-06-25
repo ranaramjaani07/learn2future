@@ -155,33 +155,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [urlReferrerId, setUrlReferrerId] = useState<string | null>(null);
   const [selectedStudentUsername, setSelectedStudentUsername] = useState<string | null>(null);
 
-  // Parse path-based routing for courses on load
+  // Parse path-based parameters like affiliate referral code on load
   useEffect(() => {
-    const path = window.location.pathname;
     const search = window.location.search;
-    
-    if (path.startsWith("/course/")) {
-      const slug = path.split("/course/")[1];
-      if (slug) {
-        setUrlCourseSlug(slug);
-        setSelectedCourseSlug(slug);
-        
-        // Parse search params for ref
-        const searchParams = new URLSearchParams(search);
-        const ref = searchParams.get("ref");
-        if (ref) {
-          setUrlReferrerId(ref);
-        }
-        
-        // Direct route to courses details screen
-        setCurrentPageState("course-details");
-      }
-    } else if (path.startsWith("/student/")) {
-      const username = path.split("/student/")[1];
-      if (username) {
-        setSelectedStudentUsername(username);
-        setCurrentPageState("student-portfolio");
-      }
+    const searchParams = new URLSearchParams(search);
+    const ref = searchParams.get("ref");
+    if (ref) {
+      setUrlReferrerId(ref);
     }
   }, []);
   const [user, setUser] = useState<FirebaseUser | null>(null);
@@ -353,26 +333,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Sync hash with page
+  // Sync page state and update browser history with SEO-friendly path URLs
   const setCurrentPage = (page: CurrentPage, extraId: string | null = null) => {
     setCurrentPageState(page);
+    let targetPath = "/";
+
     if (page === "course-details" && extraId) {
       setSelectedCourseSlug(extraId);
-      window.history.pushState(null, "", "/course/" + extraId);
+      targetPath = "/course/" + extraId;
     } else if (page === "student-portfolio" && extraId) {
       setSelectedStudentUsername(extraId);
-      window.history.pushState(null, "", "/student/" + extraId);
+      targetPath = "/student/" + extraId;
     } else if (page === "blog-details" && extraId) {
       setSelectedBlogSlug(extraId);
-      window.location.hash = `#blog-details/${extraId}`;
-    } else if (page === "thank-you" && extraId) {
-      window.location.hash = `#thank-you/${extraId}`;
-    } else {
-      if (window.location.pathname !== "/" && window.location.pathname !== "/index.html") {
-        window.history.pushState(null, "", "/#" + page);
-      } else {
-        window.location.hash = `#${page}`;
-      }
+      targetPath = "/blog/" + extraId;
+    } else if (page === "blog") {
+      targetPath = "/blogs";
+    } else if (page === "courses") {
+      targetPath = "/courses";
+    } else if (page === "about") {
+      targetPath = "/about";
+    } else if (page === "contact") {
+      targetPath = "/contact";
+    } else if (page === "terms") {
+      targetPath = "/terms";
+    } else if (page === "privacy") {
+      targetPath = "/privacy";
+    } else if (page === "cart") {
+      targetPath = "/cart";
+    } else if (page === "thank-you") {
+      targetPath = extraId ? "/thank-you?order=" + extraId : "/thank-you";
+    } else if (page === "my-enrollments") {
+      targetPath = "/my-enrollments";
+    } else if (page === "admin-login") {
+      targetPath = "/admin-login";
+    } else if (page === "admin-dashboard") {
+      targetPath = "/admin-dashboard";
+    } else if (page === "onboarding") {
+      targetPath = "/onboarding";
+    } else if (page === "home") {
+      targetPath = "/";
+    }
+
+    if (window.location.pathname !== targetPath && !targetPath.includes("?")) {
+      window.history.pushState(null, "", targetPath);
+    } else if (targetPath.includes("?")) {
+      window.history.pushState(null, "", targetPath);
     }
   };
 
@@ -382,11 +388,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const hashRaw = window.location.hash.replace("#", "");
       let parsedPage: CurrentPage = "home";
       
+      // 1. Primary path-based URL parsing (Fully indexable & crawlable)
       if (path.startsWith("/course/")) {
         const slug = path.split("/course/")[1];
         if (slug) {
           parsedPage = "course-details";
           setSelectedCourseSlug(slug);
+        }
+      } else if (path.startsWith("/blog/")) {
+        const slug = path.split("/blog/")[1];
+        if (slug) {
+          parsedPage = "blog-details";
+          setSelectedBlogSlug(slug);
         }
       } else if (path.startsWith("/student/")) {
         const username = path.split("/student/")[1];
@@ -394,30 +407,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           parsedPage = "student-portfolio";
           setSelectedStudentUsername(username);
         }
-      } else if (hashRaw.startsWith("course-details/")) {
-        parsedPage = "course-details";
-        const slug = hashRaw.replace("course-details/", "");
-        setSelectedCourseSlug(slug);
-      } else if (hashRaw.startsWith("blog-details/")) {
-        parsedPage = "blog-details";
-        const slug = hashRaw.replace("blog-details/", "");
-        setSelectedBlogSlug(slug);
-      } else if (hashRaw.startsWith("thank-you/") || hashRaw.startsWith("order-success/")) {
+      } else if (path === "/courses" || path === "/courses/") {
+        parsedPage = "courses";
+      } else if (path === "/blogs" || path === "/blogs/" || path === "/blog" || path === "/blog/") {
+        parsedPage = "blog";
+      } else if (path === "/about" || path === "/about/") {
+        parsedPage = "about";
+      } else if (path === "/contact" || path === "/contact/") {
+        parsedPage = "contact";
+      } else if (path === "/terms" || path === "/terms/") {
+        parsedPage = "terms";
+      } else if (path === "/privacy" || path === "/privacy/") {
+        parsedPage = "privacy";
+      } else if (path === "/cart" || path === "/cart/") {
+        parsedPage = "cart";
+      } else if (path === "/thank-you" || path === "/thank-you/") {
         parsedPage = "thank-you";
+      } else if (path === "/my-enrollments" || path === "/my-enrollments/") {
+        parsedPage = "my-enrollments";
+      } else if (path === "/admin-login" || path === "/admin-login/") {
+        parsedPage = "admin-login";
+      } else if (path === "/admin-dashboard" || path === "/admin-dashboard/") {
+        parsedPage = "admin-dashboard";
+      } else if (path === "/onboarding" || path === "/onboarding/") {
+        parsedPage = "onboarding";
       } else {
-        const hash = hashRaw as CurrentPage;
-        const validPages: CurrentPage[] = [
-          "home", "courses", "about", "contact", "admin-login", "admin-dashboard", 
-          "my-enrollments", "blog", "blog-details", "terms", "privacy", "onboarding", "cart", "thank-you", "student-portfolio"
-        ];
-        if (hashRaw === "thank-you" || hashRaw === "order-success") {
-          parsedPage = "thank-you";
+        // 2. Backward-compatible fallback for legacy hash-based sharing links
+        if (hashRaw.startsWith("course-details/")) {
+          parsedPage = "course-details";
+          const slug = hashRaw.replace("course-details/", "");
+          setSelectedCourseSlug(slug);
+        } else if (hashRaw.startsWith("blog-details/")) {
+          parsedPage = "blog-details";
+          const slug = hashRaw.replace("blog-details/", "");
+          setSelectedBlogSlug(slug);
         } else if (hashRaw.startsWith("student/")) {
           parsedPage = "student-portfolio";
           const username = hashRaw.replace("student/", "");
           setSelectedStudentUsername(username);
-        } else if (validPages.includes(hash)) {
-          parsedPage = hash;
+        } else if (hashRaw.startsWith("thank-you/") || hashRaw.startsWith("order-success/")) {
+          parsedPage = "thank-you";
+        } else {
+          const hash = hashRaw as CurrentPage;
+          const validPages: CurrentPage[] = [
+            "home", "courses", "about", "contact", "admin-login", "admin-dashboard", 
+            "my-enrollments", "blog", "blog-details", "terms", "privacy", "onboarding", "cart", "thank-you", "student-portfolio"
+          ];
+          if (hashRaw === "thank-you" || hashRaw === "order-success") {
+            parsedPage = "thank-you";
+          } else if (validPages.includes(hash)) {
+            parsedPage = hash === "blog" ? "blog" : hash;
+          }
         }
       }
       
@@ -858,11 +898,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return false;
     }
     
-    // PREVENT DUPLICATE PURCHASES
-    if (user && hasPurchasedCourse(user.uid, course.id)) {
-      showToast("You already own this course.", "error");
-      return false;
-    }
+    // PREVENT DUPLICATE PURCHASES - DELETED AS PER USER REQUEST TO ALLOW BUYING MULTIPLE TIMES
+    // if (user && hasPurchasedCourse(user.uid, course.id)) {
+    //   showToast("You already own this course.", "error");
+    //   return false;
+    // }
 
     if (user.uid === "demo_admin_uid" || user.uid === "demo_student_uid") {
       const existingItem = cart.find(item => item.productId === course.id);

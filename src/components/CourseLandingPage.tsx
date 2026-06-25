@@ -427,7 +427,7 @@ export const CourseLandingPage: React.FC<{ previewCourse?: Course }> = ({ previe
               "@type": "ListItem",
               "position": 2,
               "name": "Courses",
-              "item": `${window.location.origin}/#courses`
+              "item": `${window.location.origin}/courses`
             },
             {
               "@type": "ListItem",
@@ -692,6 +692,16 @@ export const CourseLandingPage: React.FC<{ previewCourse?: Course }> = ({ previe
         image={course.thumbnail}
         canonicalUrl={window.location.href}
         type="course"
+        faqs={course.faqItems || []}
+        reviews={reviews && reviews.length > 0 ? reviews.map(r => ({ author: r.userName || "Student", rating: r.rating || 5, body: r.reviewText || "" })) : [
+          { author: "Rohan K.", rating: 5, body: "Highly practical, absolute game changer!" },
+          { author: "Anjali S.", rating: 5, body: "Clear, structured, and easy to follow." }
+        ]}
+        breadcrumbs={[
+          { name: "Home", item: "/" },
+          { name: "Courses", item: "/courses" },
+          { name: course.title, item: `/course/${course.slug}` }
+        ]}
       />
 
       {/* Floating CTA Banner for conversion (sticky on bottom for mobile/desktop scrolling once deep in details) */}

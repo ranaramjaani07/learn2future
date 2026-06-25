@@ -67,6 +67,7 @@ export const BlogDetails: React.FC = () => {
   const [related, setRelated] = useState<BlogType[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [copied, setCopied] = useState<boolean>(false);
+  const [headers, setHeaders] = useState<{ id: string; text: string; level: number }[]>([]);
 
   useEffect(() => {
     if (!selectedBlogSlug) {
@@ -174,6 +175,36 @@ export const BlogDetails: React.FC = () => {
     loadBlogData();
   }, [selectedBlogSlug]);
 
+  // Extract headers for Table of Contents
+  useEffect(() => {
+    if (blog && blog.content) {
+      const lines = blog.content.split("\n");
+      const list: { id: string; text: string; level: number }[] = [];
+      lines.forEach(line => {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("## ")) {
+          const text = trimmed.slice(3).replace(/[*_`]/g, "").trim();
+          const id = text.toLowerCase().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
+          list.push({ id, text, level: 2 });
+        } else if (trimmed.startsWith("### ")) {
+          const text = trimmed.slice(4).replace(/[*_`]/g, "").trim();
+          const id = text.toLowerCase().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
+          list.push({ id, text, level: 3 });
+        }
+      });
+      setHeaders(list);
+    }
+  }, [blog]);
+
+  const scrollToHeader = (id: string) => {
+    const element = document.getElementById(id);
+    if (element) {
+      const yOffset = -90; // offset for fixed navbar
+      const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: "smooth" });
+    }
+  };
+
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href);
     setCopied(true);
@@ -185,6 +216,33 @@ export const BlogDetails: React.FC = () => {
     const wordsPerMinute = 225;
     const wordsCount = text ? text.split(/\s+/).length : 0;
     return Math.max(1, Math.ceil(wordsCount / wordsPerMinute));
+  };
+
+  const TableOfContents = () => {
+    if (headers.length === 0) return null;
+    return (
+      <div className="bg-white dark:bg-neutral-950 border border-neutral-150 dark:border-brand-border p-6 rounded-2xl space-y-4 shadow-sm">
+        <h3 className="font-display text-xs font-bold text-neutral-950 dark:text-white flex items-center gap-2 uppercase tracking-wider">
+          <BookOpen className="w-4 h-4 text-brand-gold" />
+          <span>Table of Contents</span>
+        </h3>
+        <nav className="space-y-2">
+          {headers.map((h, i) => (
+            <button
+              key={i}
+              onClick={() => scrollToHeader(h.id)}
+              className={`block text-left text-xs font-medium hover:text-brand-gold transition-colors select-none leading-relaxed ${
+                h.level === 3 
+                  ? "pl-4 text-neutral-450 dark:text-neutral-500" 
+                  : "text-neutral-700 dark:text-neutral-300 font-semibold"
+              }`}
+            >
+              • {h.text}
+            </button>
+          ))}
+        </nav>
+      </div>
+    );
   };
 
   if (loading) {
@@ -227,6 +285,11 @@ export const BlogDetails: React.FC = () => {
         author={blog.author}
         publishDate={blog.publishDate}
         type="article"
+        breadcrumbs={[
+          { name: "Home", item: "/" },
+          { name: "Blog", item: "/blogs" },
+          { name: blog.title, item: `/blog/${blog.slug}` }
+        ]}
       />
 
       <div className="max-w-4xl mx-auto px-6 space-y-12">
@@ -305,10 +368,24 @@ export const BlogDetails: React.FC = () => {
           />
         </div>
 
-        {/* Dynamic Markdown Article Content */}
-        <article className="prose prose-neutral dark:prose-invert max-w-none text-neutral-850 dark:text-neutral-300">
-          <MarkdownRenderer content={blog.content} />
-        </article>
+        {/* Dynamic Markdown Article and Sidebar Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <div className="lg:col-span-8 space-y-8">
+            {/* Table of Contents for Mobile Screens */}
+            <div className="lg:hidden">
+              <TableOfContents />
+            </div>
+            
+            <article className="prose prose-neutral dark:prose-invert max-w-none text-neutral-850 dark:text-neutral-300">
+              <MarkdownRenderer content={blog.content} />
+            </article>
+          </div>
+
+          {/* Sticky Table of Contents Sidebar for Desktop Screens */}
+          <aside className="hidden lg:block lg:col-span-4 sticky top-24 space-y-6">
+            <TableOfContents />
+          </aside>
+        </div>
 
         {/* Related Articles Read more footer block */}
         <div className="pt-16 border-t border-neutral-200 dark:border-brand-border select-none">

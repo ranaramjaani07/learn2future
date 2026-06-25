@@ -51,6 +51,17 @@ export const CartPage: React.FC = () => {
   const [createdOrderRef, setCreatedOrderRef] = useState<any | null>(null);
   const [simulatedOrder, setSimulatedOrder] = useState<any | null>(null);
 
+  // States for Razorpay Checkout Audit & Fallback
+  const [checkoutLogs, setCheckoutLogs] = useState<string[]>([]);
+  const [createdOrderData, setCreatedOrderData] = useState<any | null>(null);
+  const [popupBlockerDetected, setPopupBlockerDetected] = useState<boolean>(false);
+  const [razorpayOpenedSuccessfully, setRazorpayOpenedSuccessfully] = useState<boolean>(false);
+
+  const addCheckoutLog = (message: string) => {
+    console.log(`[CHECKOUT-LOG] ${message}`);
+    setCheckoutLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${message}`]);
+  };
+
   // States for manual UPI billing backup flow
   const [paymentMethod, setPaymentMethod] = useState<"razorpay" | "upi">("razorpay");
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
@@ -372,14 +383,150 @@ export const CartPage: React.FC = () => {
     });
   };
 
+  // Share payment verification logic across standard and fallback checkout triggers
+  const handlePaymentVerification = async (paymentResponse: any, orderData: any) => {
+    try {
+      addCheckoutLog("Initiating server-side cryptographic signature verification...");
+      setSubmittingOrder(true);
+      setUploadError("");
+
+      const verifyRes = await fetch("/api/pay/verify-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          razorpay_payment_id: paymentResponse.razorpay_payment_id,
+          razorpay_order_id: paymentResponse.razorpay_order_id,
+          razorpay_signature: paymentResponse.razorpay_signature,
+          courseId: cart[0]?.productId || "multiple_items",
+          courseName: cart.length > 1 ? `${cart.length} Courses Bundle` : (cart[0]?.productTitle || "Digital Training Program"),
+          userId: user?.uid || "anonymous",
+          buyerName: checkoutForm.name,
+          email: checkoutForm.email,
+          telegram: checkoutForm.telegram,
+          price: finalCost,
+          originalPrice: cartSubtotal,
+          discountApplied: discountAmount,
+          couponCode: appliedCoupon || "None",
+          cartItems: cart.map(item => ({
+            productId: item.productId,
+            productTitle: item.productTitle,
+            productImage: item.productImage,
+            price: item.price
+          }))
+        })
+      });
+
+      if (!verifyRes.ok) {
+        const vErr = await verifyRes.json();
+        throw new Error(vErr.error || "Checkout validation failed. Signature was rejected by security desk.");
+      }
+
+      const verifyData = await verifyRes.json();
+      if (verifyData.success) {
+        addCheckoutLog("Payment verified successfully on server! Enrolling student in classes...");
+        // Authenticated direct client database write
+        await logTransactionDirectlyToDb(verifyData.orderId, paymentResponse.razorpay_payment_id || "pay_mock", paymentResponse.razorpay_order_id);
+
+        await clearCart();
+
+        // Setup local order confirmation tracking
+        setCreatedOrderRef({
+          id: verifyData.orderId,
+          email: checkoutForm.email,
+          courseName: cart.length > 1 ? `${cart.length} Courses Bundle` : (cart[0]?.productTitle || "Digital Course"),
+          status: "Verified"
+        });
+
+        // Tracking integration
+        try {
+          if (typeof (window as any).fbq === "function") {
+            (window as any).fbq("track", "Purchase", {
+              value: Number(finalCost),
+              currency: "INR",
+              content_name: cart.length > 1 ? `${cart.length} Courses Bundle` : (cart[0]?.productTitle || "Digital Course"),
+              content_ids: cart.map(item => item.productId),
+              content_type: "product",
+              order_id: verifyData.orderId
+            });
+          }
+        } catch (_) {}
+
+        setCheckoutStep("success");
+        setCurrentPage("thank-you", verifyData.orderId);
+        await logUserActivity("Purchase Verified", `Completed Razorpay Transaction for Order #${verifyData.orderId}`);
+      }
+    } catch (verifyError: any) {
+      console.error("Payment verification failure:", verifyError);
+      addCheckoutLog(`Verification error: ${verifyError.message || verifyError}`);
+      setUploadError("Payment completed, but verification failed: " + (verifyError.message || "Unknown error"));
+    } finally {
+      setSubmittingOrder(false);
+    }
+  };
+
+  // Direct, bulletproof user-gesture handler synchronous launch (immune to popup blockers)
+  const handleFallbackClick = () => {
+    addCheckoutLog("Button clicked: User manually requested direct fallback checkout window.");
+    if (!createdOrderData) {
+      addCheckoutLog("Error: Fallback payment clicked but no created order data was found. Retrying order creation...");
+      triggerRazorpayPayment();
+      return;
+    }
+
+    try {
+      addCheckoutLog("Synchronously initializing standard Razorpay popover options...");
+      const options = {
+        key: createdOrderData.key_id,
+        amount: createdOrderData.amount,
+        currency: createdOrderData.currency,
+        name: "Learn 2 Future",
+        description: cart.length > 1 ? `${cart.length} Courses Bundle` : (cart[0]?.productTitle || "Digital Training Program"),
+        order_id: createdOrderData.id,
+        handler: async function (paymentResponse: any) {
+          addCheckoutLog("Razorpay popup success handler response intercepted!");
+          await handlePaymentVerification(paymentResponse, createdOrderData);
+        },
+        prefill: {
+          name: checkoutForm.name,
+          email: checkoutForm.email,
+          contact: checkoutForm.mobile
+        },
+        theme: {
+          color: "#F5B300"
+        },
+        modal: {
+          ondismiss: function () {
+            addCheckoutLog("Razorpay user-dismissed event caught.");
+            setSubmittingOrder(false);
+          }
+        }
+      };
+
+      addCheckoutLog("Razorpay popup opened: Calling rzpInstance.open() synchronously...");
+      const rzpInstance = new (window as any).Razorpay(options);
+      rzpInstance.open();
+      setPopupBlockerDetected(false);
+      setRazorpayOpenedSuccessfully(true);
+    } catch (err: any) {
+      addCheckoutLog(`Error during manual fallback invocation: ${err.message || err}`);
+    }
+  };
+
   // Automated razorpay checkout sequence triggering order generation and signature audit
   const triggerRazorpayPayment = async () => {
     setUploadError("");
     setSubmittingOrder(true);
     setSimulatedOrder(null);
+    setPopupBlockerDetected(false);
+    setRazorpayOpenedSuccessfully(false);
     
+    // Audit log initiation
+    setCheckoutLogs([]);
+    addCheckoutLog("Button clicked: Initiated secure Razorpay checkout process...");
+
     try {
       // 1. Create native checkout order payload in backend session
+      addCheckoutLog("Contacting backend service to create Razorpay Order Session (/api/pay/create-order)...");
       const response = await fetch("/api/pay/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -413,27 +560,33 @@ export const CartPage: React.FC = () => {
             }
           }
         } catch (_) {}
+        addCheckoutLog(`Order creation failed: ${errMsg}`);
         throw new Error(errMsg);
       }
 
       let orderData: any;
       try {
         orderData = await response.json(); // { id, amount, currency, key_id, isSimulated }
+        setCreatedOrderData(orderData);
+        addCheckoutLog(`Order created successfully. Server Session ID: ${orderData.id}`);
       } catch (e) {
+        addCheckoutLog("Order generation failed: Response format not recognized by client parser.");
         throw new Error("Unable to parse payment gateway session response. Please verify server connection and try again.");
       }
 
       // If simulated order is forced by backend, trigger simulated checkout directly
       if (orderData.isSimulated) {
-        console.log("Forced simulation response received from backend. Activating sandbox payment UI...");
+        addCheckoutLog("Order created: Forced sandbox bypass requested by administrative authority.");
         setSimulatedOrder(orderData);
         setSubmittingOrder(false);
         return;
       }
 
       // 2. Load standard official Razorpay interactive overlay popup in window
+      addCheckoutLog("Razorpay script loaded: Verifying Razorpay SDK presence in page context...");
       const isScriptLoaded = await loadRazorpayScript();
       if (!isScriptLoaded || !(window as any).Razorpay) {
+        addCheckoutLog("Error: Razorpay secure script could not be loaded into DOM. Check network connection or AdBlockers.");
         console.warn("Razorpay SDK not found in browser.");
         if (orderData.isSimulated) {
           console.log("Activating sandbox payment UI as requested by backend...");
@@ -447,6 +600,8 @@ export const CartPage: React.FC = () => {
         return;
       }
 
+      addCheckoutLog("Razorpay script loaded successfully.");
+
       const options = {
         key: orderData.key_id,
         amount: orderData.amount,
@@ -455,80 +610,8 @@ export const CartPage: React.FC = () => {
         description: cart.length > 1 ? `${cart.length} Courses Bundle` : (cart[0]?.productTitle || "Digital Training Program"),
         order_id: orderData.id,
         handler: async function (paymentResponse: any) {
-          try {
-            setSubmittingOrder(true);
-            setUploadError("");
-
-            const verifyRes = await fetch("/api/pay/verify-payment", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                razorpay_payment_id: paymentResponse.razorpay_payment_id,
-                razorpay_order_id: paymentResponse.razorpay_order_id,
-                razorpay_signature: paymentResponse.razorpay_signature,
-                courseId: cart[0]?.productId || "multiple_items",
-                courseName: cart.length > 1 ? `${cart.length} Courses Bundle` : (cart[0]?.productTitle || "Digital Training Program"),
-                userId: user?.uid || "anonymous",
-                buyerName: checkoutForm.name,
-                email: checkoutForm.email,
-                telegram: checkoutForm.telegram,
-                price: finalCost,
-                originalPrice: cartSubtotal,
-                discountApplied: discountAmount,
-                couponCode: appliedCoupon || "None",
-                cartItems: cart.map(item => ({
-                  productId: item.productId,
-                  productTitle: item.productTitle,
-                  productImage: item.productImage,
-                  price: item.price
-                }))
-              })
-            });
-
-            if (!verifyRes.ok) {
-              const vErr = await verifyRes.json();
-              throw new Error(vErr.error || "Checkout validation failed. Signature was rejected by security desk.");
-            }
-
-            const verifyData = await verifyRes.json();
-            if (verifyData.success) {
-              // Authenticated direct client database write
-              await logTransactionDirectlyToDb(verifyData.orderId, paymentResponse.razorpay_payment_id || "pay_mock", paymentResponse.razorpay_order_id);
-
-              await clearCart();
-
-              // Setup local order confirmation tracking
-              setCreatedOrderRef({
-                id: verifyData.orderId,
-                email: checkoutForm.email,
-                courseName: cart.length > 1 ? `${cart.length} Courses Bundle` : (cart[0]?.productTitle || "Digital Course"),
-                status: "Verified"
-              });
-
-              // Tracking integration
-              try {
-                if (typeof (window as any).fbq === "function") {
-                  (window as any).fbq("track", "Purchase", {
-                    value: Number(finalCost),
-                    currency: "INR",
-                    content_name: cart.length > 1 ? `${cart.length} Courses Bundle` : (cart[0]?.productTitle || "Digital Course"),
-                    content_ids: cart.map(item => item.productId),
-                    content_type: "product",
-                    order_id: verifyData.orderId
-                  });
-                }
-              } catch (_) {}
-
-              setCheckoutStep("success");
-              setCurrentPage("thank-you", verifyData.orderId);
-              await logUserActivity("Purchase Verified", `Completed Razorpay Transaction for Order #${verifyData.orderId}`);
-            }
-          } catch (verifyError: any) {
-            console.error("Payment verification failure:", verifyError);
-            setUploadError("Payment completed, but verification failed: " + (verifyError.message || "Unknown error"));
-          } finally {
-            setSubmittingOrder(false);
-          }
+          addCheckoutLog("Razorpay standard success handler triggered!");
+          await handlePaymentVerification(paymentResponse, orderData);
         },
         prefill: {
           name: checkoutForm.name,
@@ -540,15 +623,32 @@ export const CartPage: React.FC = () => {
         },
         modal: {
           ondismiss: function () {
+            addCheckoutLog("Razorpay popup closed by user action.");
             setSubmittingOrder(false);
           }
         }
       };
 
       try {
+        addCheckoutLog("Razorpay popup opened attempt. Calling Razorpay.open()...");
         const rzpInstance = new (window as any).Razorpay(options);
         rzpInstance.open();
+
+        // Set a timer to check if the popup successfully loaded in the DOM or was blocked
+        setTimeout(() => {
+          const container = document.querySelector(".razorpay-container") || document.querySelector("iframe[src*='checkout.razorpay.com']");
+          if (!container) {
+            addCheckoutLog("Warning: Razorpay iframe could not be detected in DOM. Popup is likely BLOCKED by the browser!");
+            setPopupBlockerDetected(true);
+          } else {
+            addCheckoutLog("Razorpay popup opened: Container successfully mounted and detected in browser viewport.");
+            setPopupBlockerDetected(false);
+            setRazorpayOpenedSuccessfully(true);
+          }
+        }, 1500);
+
       } catch (innerRzpError: any) {
+        addCheckoutLog(`Razorpay popup failed to open: ${innerRzpError.message || innerRzpError}`);
         console.warn("Razorpay dynamic launch blocked or failed.", innerRzpError);
         if (orderData.isSimulated) {
           console.log("Activating sandbox payment UI as requested by backend...");
@@ -1153,7 +1253,7 @@ export const CartPage: React.FC = () => {
                   </div>
                 ) : (
                   /* STANDARD AUTOMATED GATEWAY LOADER */
-                  <>
+                  <div className="space-y-6">
                     <div className="w-16 h-16 bg-brand-gold/10 border border-brand-gold/25 rounded-full flex items-center justify-center mx-auto text-brand-gold">
                       <Loader2 className="w-8 h-8 animate-spin" />
                     </div>
@@ -1165,7 +1265,53 @@ export const CartPage: React.FC = () => {
                         Please complete the secure authenticated payment overlay on your device. We are connecting you to Indian banking servers. Do not refresh or go back.
                       </p>
                     </div>
-                  </>
+
+                    {/* Pop-up Blocker / Sandboxed Iframe Detection Warning & Fallback Trigger */}
+                    {createdOrderData && (
+                      <div className="p-4 bg-amber-950/20 border border-amber-800/40 text-amber-200 rounded-2xl text-left text-xs space-y-3 animate-fadeIn">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                          <div className="space-y-1">
+                            <span className="font-bold text-amber-300 block">Browser Popup Blocker / Sandbox Iframe Detected?</span>
+                            <p className="text-[11px] text-neutral-350 leading-relaxed">
+                              If the secure payment popup did not open automatically, your browser or iframe context is protecting/blocking overlays. 
+                              Click the button below to force launch the payment safely using a direct synchronous gesture.
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleFallbackClick}
+                          className="w-full bg-brand-gold hover:bg-[#ffd34d] text-black font-sans font-extrabold text-[11px] uppercase tracking-widest py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow active:scale-95 cursor-pointer font-bold"
+                        >
+                          <span>👉 Click here to open payment window</span>
+                          <CreditCard className="w-4 h-4 text-black" />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Live Transaction Audit Log Panel */}
+                    <div className="border border-neutral-900 bg-[#070707] rounded-2xl p-4 text-left space-y-2">
+                      <div className="flex items-center justify-between border-b border-neutral-900 pb-2">
+                        <span className="text-[9px] font-mono uppercase tracking-widest text-neutral-400 font-bold">Live Transaction Audit Log</span>
+                        <span className="text-[9px] font-mono text-brand-gold font-bold bg-brand-gold/10 px-2 py-0.5 rounded-full">
+                          {razorpayOpenedSuccessfully ? "Opened" : popupBlockerDetected ? "Blocked" : "Initiating"}
+                        </span>
+                      </div>
+                      <div className="font-mono text-[10px] text-neutral-400 space-y-1 max-h-32 overflow-y-auto custom-scrollbar leading-relaxed">
+                        {checkoutLogs.length === 0 ? (
+                          <p className="text-neutral-600 italic">No activity recorded yet...</p>
+                        ) : (
+                          checkoutLogs.map((log, index) => (
+                            <p key={index} className={log.includes("Warning") || log.includes("Error") ? "text-red-400 font-semibold" : log.includes("successfully") || log.includes("verified successfully") ? "text-green-400 font-semibold" : ""}>
+                              {log}
+                            </p>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 )}
 
                 {uploadError && (

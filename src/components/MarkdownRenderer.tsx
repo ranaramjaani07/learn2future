@@ -103,21 +103,27 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
 
     // 3. Headers
     if (trimmed.startsWith("# ")) {
+      const headingText = trimmed.slice(2);
+      const headingId = headingText.toLowerCase().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
       parsedElements.push(
-        <h1 key={idx} className="font-display text-2xl sm:text-3xl font-extrabold text-neutral-900 dark:text-white mt-10 mb-4 tracking-tight leading-snug">
-          {parseInlineStyles(trimmed.slice(2))}
+        <h1 id={headingId} key={idx} className="font-display text-2xl sm:text-3xl font-extrabold text-neutral-900 dark:text-white mt-10 mb-4 tracking-tight leading-snug">
+          {parseInlineStyles(headingText)}
         </h1>
       );
     } else if (trimmed.startsWith("## ")) {
+      const headingText = trimmed.slice(3);
+      const headingId = headingText.toLowerCase().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
       parsedElements.push(
-        <h2 key={idx} className="font-display text-xl sm:text-2xl font-bold text-neutral-900 dark:text-white mt-8 mb-3.5 tracking-tight border-b border-neutral-100 dark:border-neutral-800 pb-2">
-          {parseInlineStyles(trimmed.slice(3))}
+        <h2 id={headingId} key={idx} className="font-display text-xl sm:text-2xl font-bold text-neutral-900 dark:text-white mt-8 mb-3.5 tracking-tight border-b border-neutral-100 dark:border-neutral-800 pb-2">
+          {parseInlineStyles(headingText)}
         </h2>
       );
     } else if (trimmed.startsWith("### ")) {
+      const headingText = trimmed.slice(4);
+      const headingId = headingText.toLowerCase().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
       parsedElements.push(
-        <h3 key={idx} className="font-display text-lg sm:text-xl font-bold text-neutral-900 dark:text-white mt-6 mb-2 tracking-tight">
-          {parseInlineStyles(trimmed.slice(4))}
+        <h3 id={headingId} key={idx} className="font-display text-lg sm:text-xl font-bold text-neutral-900 dark:text-white mt-6 mb-2 tracking-tight">
+          {parseInlineStyles(headingText)}
         </h3>
       );
     } 
