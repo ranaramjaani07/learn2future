@@ -577,6 +577,26 @@ export const Home: React.FC = () => {
       setLoadingBlogs(true);
       const fallbackList = [
         {
+          id: "bootstrap-5",
+          title: "Why Learn2Future Exists: The Mission Behind Affordable Skill Education",
+          slug: "why-learn2future-exists-affordable-skill-education",
+          category: "About Us",
+          featuredImage: "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?q=80&w=600&auto=format&fit=crop",
+          metaDescription: "Understand why Learn2Future exists. Discover how we're breaking the high cost barrier of digital upskilling and empowering Indian students & freelancers.",
+          author: "Learn2Future Team",
+          publishDate: "2026-06-25"
+        },
+        {
+          id: "bootstrap-4",
+          title: "What Is Learn2Future? The Mission Behind Affordable Skill Education in India",
+          slug: "what-is-learn2future-affordable-skill-education-india",
+          category: "Career Skills",
+          featuredImage: "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?q=80&w=600&auto=format&fit=crop",
+          metaDescription: "Learn2Future is India's affordable skill education platform. Discover its mission, courses, and why it's helping students and freelancers grow their careers.",
+          author: "Learn2Future Team",
+          publishDate: "2026-06-25"
+        },
+        {
           id: "bootstrap-1",
           title: "The Agentic Era: How Autonomous AI Co-Pilots Are Redefining Engineering",
           slug: "agentic-era-ai-copilots",
@@ -627,9 +647,16 @@ export const Home: React.FC = () => {
               publishDate: data.publishDate || ""
             };
           });
-          setLatestBlogs(list);
+          
+          const firestoreSlugs = new Set(list.map(b => b.slug));
+          const uniqueFallback = fallbackList.filter(b => !firestoreSlugs.has(b.slug));
+          const merged = [...list, ...uniqueFallback].sort((a, b) => {
+            return (b.publishDate || "").localeCompare(a.publishDate || "");
+          });
+          
+          setLatestBlogs(merged.slice(0, 3));
         } else {
-          setLatestBlogs(fallbackList);
+          setLatestBlogs(fallbackList.slice(0, 3));
         }
       } catch (err: any) {
         console.warn("Could not load database blog posts inside homepage:", err);

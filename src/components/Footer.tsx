@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { 
   Send as TelegramIcon, 
@@ -10,7 +11,7 @@ import {
 } from "lucide-react";
 
 export const Footer: React.FC = () => {
-  const { setCurrentPage, globalSettings } = useApp();
+  const { globalSettings } = useApp();
 
   return (
     <footer className="border-t transition-colors duration-300 bg-neutral-50 dark:bg-[#080808] border-neutral-200 dark:border-neutral-900">
@@ -72,36 +73,36 @@ export const Footer: React.FC = () => {
             </h3>
             <ul className="space-y-2.5">
               <li>
-                <button
-                  onClick={() => setCurrentPage("home")}
+                <Link
+                  to="/"
                   className="text-sm font-medium text-neutral-500 dark:text-neutral-400 hover:text-brand-gold transition-colors"
                 >
                   Home Portal
-                </button>
+                </Link>
               </li>
               <li>
-                <button
-                  onClick={() => setCurrentPage("courses")}
+                <Link
+                  to="/courses"
                   className="text-sm font-medium text-neutral-500 dark:text-neutral-400 hover:text-brand-gold transition-colors"
                 >
                   Course Catalog
-                </button>
+                </Link>
               </li>
               <li>
-                <button
-                  onClick={() => setCurrentPage("about")}
+                <Link
+                  to="/about"
                   className="text-sm font-medium text-neutral-500 dark:text-neutral-400 hover:text-brand-gold transition-colors"
                 >
                   Our Philosophy
-                </button>
+                </Link>
               </li>
               <li>
-                <button
-                  onClick={() => setCurrentPage("contact")}
+                <Link
+                  to="/contact"
                   className="text-sm font-medium text-neutral-500 dark:text-neutral-400 hover:text-brand-gold transition-colors"
                 >
                   Contact & Help Desk
-                </button>
+                </Link>
               </li>
             </ul>
           </div>
@@ -139,24 +140,24 @@ export const Footer: React.FC = () => {
             &copy; {new Date().getFullYear()} Learn 2 Future. All rights reserved. Registered Educational Brand.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mt-4 sm:mt-0">
-            <button 
-              onClick={() => setCurrentPage("terms")}
+            <Link 
+              to="/terms"
               className="text-xs text-neutral-400 dark:text-neutral-500 hover:text-brand-gold transition-colors font-mono uppercase"
             >
               Terms & Conditions
-            </button>
-            <button 
-              onClick={() => setCurrentPage("privacy")}
+            </Link>
+            <Link 
+              to="/privacy"
               className="text-xs text-neutral-400 dark:text-neutral-500 hover:text-brand-gold transition-colors font-mono uppercase"
             >
               Privacy Policy
-            </button>
-            <button 
-              onClick={() => setCurrentPage("admin-login")}
+            </Link>
+            <Link 
+              to="/admin-login"
               className="text-xs text-neutral-400 dark:text-neutral-500 hover:text-brand-gold transition-colors font-mono uppercase tracking-widest flex items-center gap-1"
             >
               <ShieldCheck className="w-3 h-3" /> Admin Portal
-            </button>
+            </Link>
           </div>
         </div>
       </div>

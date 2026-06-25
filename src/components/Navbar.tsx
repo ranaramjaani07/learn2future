@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { motion } from "motion/react";
 import { 
@@ -57,12 +58,12 @@ export const Navbar: React.FC = () => {
   };
 
   const navItems = [
-    { label: "Home", page: "home" },
-    { label: "Courses", page: "courses" },
-    { label: "Blog", page: "blog" },
-    ...(user ? [{ label: "My Enrollments", page: "my-enrollments" }] : []),
-    { label: "About", page: "about" },
-    { label: "Contact", page: "contact" }
+    { label: "Home", page: "home", path: "/" },
+    { label: "Courses", page: "courses", path: "/courses" },
+    { label: "Blog", page: "blog", path: "/blog" },
+    ...(user ? [{ label: "My Enrollments", page: "my-enrollments", path: "/my-enrollments" }] : []),
+    { label: "About", page: "about", path: "/about" },
+    { label: "Contact", page: "contact", path: "/contact" }
   ];
 
   return (
@@ -75,8 +76,9 @@ export const Navbar: React.FC = () => {
         <div className="flex items-center justify-between h-20">
           
           {/* Logo Brand Brand Identity */}
-          <div 
-            onClick={() => handleNavClick("home")}
+          <Link 
+            to="/"
+            onClick={() => setMobileMenuOpen(false)}
             className="flex items-center space-x-2 cursor-pointer group"
           >
             <img 
@@ -93,16 +95,16 @@ export const Navbar: React.FC = () => {
                 Learn today. Earn tomorrow.
               </span>
             </div>
-          </div>
+          </Link>
 
           {/* Desktop Navigation Link Cluster */}
           <nav className="hidden md:flex items-center space-x-8">
             {navItems.map((item) => {
               const isActive = currentPage === item.page;
               return (
-                <button
-                  key={item.page}
-                  onClick={() => handleNavClick(item.page)}
+                <Link
+                  key={item.path}
+                  to={item.path}
                   className={`relative font-display text-sm font-medium tracking-wide transition-all py-1.5 ${
                     isActive
                       ? "text-brand-gold font-bold"
@@ -117,7 +119,7 @@ export const Navbar: React.FC = () => {
                       transition={{ type: "spring", stiffness: 350, damping: 28 }}
                     />
                   )}
-                </button>
+                </Link>
               );
             })}
           </nav>
@@ -328,9 +330,10 @@ export const Navbar: React.FC = () => {
       {mobileMenuOpen && (
         <div className="md:hidden border-t px-4 pt-4 pb-6 space-y-3 bg-white dark:bg-[#000000] border-neutral-100 dark:border-neutral-900 transition-colors">
           {navItems.map((item) => (
-            <button
-              key={item.page}
-              onClick={() => handleNavClick(item.page)}
+            <Link
+              key={item.path}
+              to={item.path}
+              onClick={() => setMobileMenuOpen(false)}
               className={`block w-full text-left font-display text-base font-semibold py-2 px-3 rounded-lg ${
                 currentPage === item.page
                   ? "text-brand-gold bg-brand-gold/10"
@@ -338,18 +341,19 @@ export const Navbar: React.FC = () => {
               }`}
             >
               {item.label}
-            </button>
+            </Link>
           ))}
 
           {/* Mobile Admin Link if logged in and admin */}
           {user && isAdmin && (
-            <button
-              onClick={() => handleNavClick("admin-dashboard")}
+            <Link
+              to="/admin-dashboard"
+              onClick={() => setMobileMenuOpen(false)}
               className="flex items-center space-x-2 w-full text-left font-display text-base font-semibold py-2 px-3 rounded-lg text-brand-gold bg-[#F5B300]/5"
             >
               <LayoutDashboard className="w-5 h-5" />
               <span>Admin Dashboard</span>
-            </button>
+            </Link>
           )}
 
           <div className="border-t pt-4 border-neutral-100 dark:border-neutral-900">

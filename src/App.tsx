@@ -1,4 +1,5 @@
 import React from "react";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AppProvider, useApp } from "./context/AppContext";
 import { Navbar } from "./components/Navbar";
 import { Footer } from "./components/Footer";
@@ -73,44 +74,7 @@ const MainLayout: React.FC = () => {
     );
   }
 
-  const renderActivePage = () => {
-    switch (currentPage) {
-      case "home":
-        return <Home />;
-      case "courses":
-        return <Courses />;
-      case "about":
-        return <About />;
-      case "contact":
-        return <Contact />;
-      case "admin-login":
-        return <AdminLogin />;
-      case "admin-dashboard":
-        return isAdmin ? <AdminDashboard /> : <AdminLogin />;
-      case "my-enrollments":
-        return <MyEnrollments />;
-      case "blog":
-        return <Blog />;
-      case "blog-details":
-        return <BlogDetails />;
-      case "terms":
-        return <Terms />;
-      case "privacy":
-        return <Privacy />;
-      case "onboarding":
-        return <Onboarding />;
-      case "cart":
-        return <CartPage />;
-      case "thank-you":
-        return <ThankYou />;
-      case "course-details":
-        return <CourseLandingPage />;
-      case "student-portfolio":
-        return <StudentPortfolio />;
-      default:
-        return <Home />;
-    }
-  };
+  const routerLocation = useLocation();
 
   const getPageSeo = () => {
     // If it's a detail page, we return null so the detail component itself handles it
@@ -212,14 +176,34 @@ const MainLayout: React.FC = () => {
       <main className="flex-grow">
         <AnimatePresence mode="wait">
           <motion.div
-            key={currentPage}
+            key={routerLocation.pathname}
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -15 }}
             transition={{ duration: 0.35, ease: "easeInOut" }}
             className="w-full"
           >
-            {renderActivePage()}
+            <Routes location={routerLocation}>
+              <Route path="/" element={<Home />} />
+              <Route path="/courses" element={<Courses />} />
+              <Route path="/course/:slug" element={<CourseLandingPage />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/contact" element={<Contact />} />
+              <Route path="/blog" element={<Blog />} />
+              <Route path="/blogs" element={<Blog />} />
+              <Route path="/blog/:slug" element={<BlogDetails />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/cart" element={<CartPage />} />
+              <Route path="/thank-you" element={<ThankYou />} />
+              <Route path="/student-portfolio" element={<StudentPortfolio />} />
+              <Route path="/student/:username" element={<StudentPortfolio />} />
+              <Route path="/onboarding" element={<Onboarding />} />
+              <Route path="/my-enrollments" element={<MyEnrollments />} />
+              <Route path="/admin-login" element={<AdminLogin />} />
+              <Route path="/admin-dashboard" element={isAdmin ? <AdminDashboard /> : <Navigate to="/admin-login" replace />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
           </motion.div>
         </AnimatePresence>
       </main>

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { 
   User as FirebaseUser, 
   signInWithPopup, 
@@ -148,12 +149,72 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentPage, setCurrentPageState] = useState<CurrentPage>("home");
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Derive currentPage from active router location path
+  const path = location.pathname;
+  let currentPage: CurrentPage = "home";
+
+  if (path.startsWith("/course/")) {
+    currentPage = "course-details";
+  } else if (path.startsWith("/blog/")) {
+    const slug = path.split("/blog/")[1];
+    if (slug) {
+      currentPage = "blog-details";
+    } else {
+      currentPage = "blog";
+    }
+  } else if (path.startsWith("/student/")) {
+    currentPage = "student-portfolio";
+  } else if (path === "/courses" || path === "/courses/") {
+    currentPage = "courses";
+  } else if (path === "/blogs" || path === "/blogs/" || path === "/blog" || path === "/blog/") {
+    currentPage = "blog";
+  } else if (path === "/about" || path === "/about/") {
+    currentPage = "about";
+  } else if (path === "/contact" || path === "/contact/") {
+    currentPage = "contact";
+  } else if (path === "/terms" || path === "/terms/") {
+    currentPage = "terms";
+  } else if (path === "/privacy" || path === "/privacy/") {
+    currentPage = "privacy";
+  } else if (path === "/cart" || path === "/cart/") {
+    currentPage = "cart";
+  } else if (path === "/thank-you" || path === "/thank-you/") {
+    currentPage = "thank-you";
+  } else if (path === "/my-enrollments" || path === "/my-enrollments/") {
+    currentPage = "my-enrollments";
+  } else if (path === "/admin-login" || path === "/admin-login/") {
+    currentPage = "admin-login";
+  } else if (path === "/admin-dashboard" || path === "/admin-dashboard/") {
+    currentPage = "admin-dashboard";
+  } else if (path === "/onboarding" || path === "/onboarding/") {
+    currentPage = "onboarding";
+  } else if (path === "/student-portfolio" || path === "/student-portfolio/") {
+    currentPage = "student-portfolio";
+  }
+
   const [selectedBlogSlug, setSelectedBlogSlug] = useState<string | null>(null);
   const [selectedCourseSlug, setSelectedCourseSlug] = useState<string | null>(null);
   const [urlCourseSlug, setUrlCourseSlug] = useState<string | null>(null);
   const [urlReferrerId, setUrlReferrerId] = useState<string | null>(null);
   const [selectedStudentUsername, setSelectedStudentUsername] = useState<string | null>(null);
+
+  // Sync router parameters into state variables
+  useEffect(() => {
+    const p = location.pathname;
+    if (p.startsWith("/course/")) {
+      const slug = p.split("/course/")[1];
+      if (slug) setSelectedCourseSlug(slug);
+    } else if (p.startsWith("/blog/")) {
+      const slug = p.split("/blog/")[1];
+      if (slug) setSelectedBlogSlug(slug);
+    } else if (p.startsWith("/student/")) {
+      const username = p.split("/student/")[1];
+      if (username) setSelectedStudentUsername(username);
+    }
+  }, [location.pathname]);
 
   // Parse path-based parameters like affiliate referral code on load
   useEffect(() => {
@@ -335,7 +396,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Sync page state and update browser history with SEO-friendly path URLs
   const setCurrentPage = (page: CurrentPage, extraId: string | null = null) => {
-    setCurrentPageState(page);
     let targetPath = "/";
 
     if (page === "course-details" && extraId) {
@@ -348,7 +408,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setSelectedBlogSlug(extraId);
       targetPath = "/blog/" + extraId;
     } else if (page === "blog") {
-      targetPath = "/blogs";
+      targetPath = "/blog";
     } else if (page === "courses") {
       targetPath = "/courses";
     } else if (page === "about") {
@@ -375,104 +435,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       targetPath = "/";
     }
 
-    if (window.location.pathname !== targetPath && !targetPath.includes("?")) {
-      window.history.pushState(null, "", targetPath);
-    } else if (targetPath.includes("?")) {
-      window.history.pushState(null, "", targetPath);
-    }
+    navigate(targetPath);
   };
-
-  useEffect(() => {
-    const handleRouteSync = () => {
-      const path = window.location.pathname;
-      const hashRaw = window.location.hash.replace("#", "");
-      let parsedPage: CurrentPage = "home";
-      
-      // 1. Primary path-based URL parsing (Fully indexable & crawlable)
-      if (path.startsWith("/course/")) {
-        const slug = path.split("/course/")[1];
-        if (slug) {
-          parsedPage = "course-details";
-          setSelectedCourseSlug(slug);
-        }
-      } else if (path.startsWith("/blog/")) {
-        const slug = path.split("/blog/")[1];
-        if (slug) {
-          parsedPage = "blog-details";
-          setSelectedBlogSlug(slug);
-        }
-      } else if (path.startsWith("/student/")) {
-        const username = path.split("/student/")[1];
-        if (username) {
-          parsedPage = "student-portfolio";
-          setSelectedStudentUsername(username);
-        }
-      } else if (path === "/courses" || path === "/courses/") {
-        parsedPage = "courses";
-      } else if (path === "/blogs" || path === "/blogs/" || path === "/blog" || path === "/blog/") {
-        parsedPage = "blog";
-      } else if (path === "/about" || path === "/about/") {
-        parsedPage = "about";
-      } else if (path === "/contact" || path === "/contact/") {
-        parsedPage = "contact";
-      } else if (path === "/terms" || path === "/terms/") {
-        parsedPage = "terms";
-      } else if (path === "/privacy" || path === "/privacy/") {
-        parsedPage = "privacy";
-      } else if (path === "/cart" || path === "/cart/") {
-        parsedPage = "cart";
-      } else if (path === "/thank-you" || path === "/thank-you/") {
-        parsedPage = "thank-you";
-      } else if (path === "/my-enrollments" || path === "/my-enrollments/") {
-        parsedPage = "my-enrollments";
-      } else if (path === "/admin-login" || path === "/admin-login/") {
-        parsedPage = "admin-login";
-      } else if (path === "/admin-dashboard" || path === "/admin-dashboard/") {
-        parsedPage = "admin-dashboard";
-      } else if (path === "/onboarding" || path === "/onboarding/") {
-        parsedPage = "onboarding";
-      } else {
-        // 2. Backward-compatible fallback for legacy hash-based sharing links
-        if (hashRaw.startsWith("course-details/")) {
-          parsedPage = "course-details";
-          const slug = hashRaw.replace("course-details/", "");
-          setSelectedCourseSlug(slug);
-        } else if (hashRaw.startsWith("blog-details/")) {
-          parsedPage = "blog-details";
-          const slug = hashRaw.replace("blog-details/", "");
-          setSelectedBlogSlug(slug);
-        } else if (hashRaw.startsWith("student/")) {
-          parsedPage = "student-portfolio";
-          const username = hashRaw.replace("student/", "");
-          setSelectedStudentUsername(username);
-        } else if (hashRaw.startsWith("thank-you/") || hashRaw.startsWith("order-success/")) {
-          parsedPage = "thank-you";
-        } else {
-          const hash = hashRaw as CurrentPage;
-          const validPages: CurrentPage[] = [
-            "home", "courses", "about", "contact", "admin-login", "admin-dashboard", 
-            "my-enrollments", "blog", "blog-details", "terms", "privacy", "onboarding", "cart", "thank-you", "student-portfolio"
-          ];
-          if (hashRaw === "thank-you" || hashRaw === "order-success") {
-            parsedPage = "thank-you";
-          } else if (validPages.includes(hash)) {
-            parsedPage = hash === "blog" ? "blog" : hash;
-          }
-        }
-      }
-      
-      setCurrentPageState(parsedPage);
-    };
-
-    window.addEventListener("hashchange", handleRouteSync);
-    window.addEventListener("popstate", handleRouteSync);
-    handleRouteSync(); // Trigger on init
-
-    return () => {
-      window.removeEventListener("hashchange", handleRouteSync);
-      window.removeEventListener("popstate", handleRouteSync);
-    };
-  }, []);
 
   // Monitor theme
   useEffect(() => {
@@ -603,7 +567,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // 1. If password user and NOT verified, force to My Enrollments page
       if (!user.emailVerified && user.providerData.some(p => p.providerId === "password")) {
         if (currentPage !== "my-enrollments") {
-          setCurrentPageState("my-enrollments");
+          setCurrentPage("my-enrollments");
         }
         return;
       }
@@ -611,14 +575,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // 2. If verified/social user and NOT complete onboarding, force to onboarding
       if (!isQuotaExceeded && (!dbUser || !dbUser.onboardingCompleted)) {
         if (currentPage !== "onboarding") {
-          setCurrentPageState("onboarding");
+          setCurrentPage("onboarding");
         }
       } else if (currentPage === "onboarding") {
-        setCurrentPageState("my-enrollments");
+        setCurrentPage("my-enrollments");
       }
     } else {
       if (currentPage === "onboarding") {
-        setCurrentPageState("home");
+        setCurrentPage("home");
       }
     }
   }, [user, dbUser, loading, loadingProfile, currentPage]);
@@ -894,7 +858,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (!dbUser?.onboardingCompleted) {
       showToast("Please complete your onboarding profile to unlock classroom and checkout facilities.", "info");
-      setCurrentPageState("onboarding");
+      setCurrentPage("onboarding");
       return false;
     }
     
