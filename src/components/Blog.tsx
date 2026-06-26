@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { Blog as BlogType } from "../types";
@@ -382,9 +383,9 @@ export const Blog: React.FC = () => {
             
             {/* Featured Post Card (Visible only when filtering is minimal and we have post/bootstrap data) */}
             {selectedCategory === "All" && searchQuery === "" && filteredBlogs.length > 0 && (
-              <div 
-                className="group relative grid grid-cols-1 lg:grid-cols-12 gap-8 bg-white dark:bg-[#111] rounded-3xl border border-neutral-100 dark:border-neutral-900 shadow-md overflow-hidden cursor-pointer hover:shadow-xl transition-all duration-300"
-                onClick={() => setCurrentPage("blog-details", filteredBlogs[0].slug)}
+              <Link 
+                to={`/blog/${filteredBlogs[0].slug}`}
+                className="group relative grid grid-cols-1 lg:grid-cols-12 gap-8 bg-white dark:bg-[#111] rounded-3xl border border-neutral-100 dark:border-neutral-900 shadow-md overflow-hidden cursor-pointer hover:shadow-xl transition-all duration-300 text-left block"
               >
                 <div className="lg:col-span-7 relative h-64 sm:h-96 w-full overflow-hidden">
                   <img
@@ -434,16 +435,16 @@ export const Blog: React.FC = () => {
                     </div>
                   </div>
                 </div>
-              </div>
+              </Link>
             )}
 
             {/* Standard Grid list of Blogs */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {filteredBlogs.slice(selectedCategory === "All" && searchQuery === "" ? 1 : 0).map(post => (
-                <article 
+                <Link 
                   key={post.id || post.slug}
-                  className="group flex flex-col justify-between bg-white dark:bg-[#111] rounded-3xl border border-neutral-100 dark:border-brand-border overflow-hidden cursor-pointer hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
-                  onClick={() => setCurrentPage("blog-details", post.slug)}
+                  to={`/blog/${post.slug}`}
+                  className="group flex flex-col justify-between bg-white dark:bg-[#111] rounded-3xl border border-neutral-100 dark:border-brand-border overflow-hidden cursor-pointer hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 text-left block"
                 >
                   <div className="relative h-48 w-full overflow-hidden">
                     <img
@@ -479,7 +480,7 @@ export const Blog: React.FC = () => {
                       </p>
                     </div>
 
-                    <div className="flex items-center justify-between pt-4 border-t border-neutral-50 dark:border-neutral-900 select-none">
+                    <div className="flex items-center justify-between pt-4 border-t border-neutral-50 dark:border-neutral-900 select-none mt-auto">
                       <span className="text-[11px] font-mono font-bold text-brand-gold flex items-center space-x-1 hover:underline">
                         <span>Read Full Guide</span>
                         <ArrowRight className="w-3.5 h-3.5 mt-0.5 group-hover:translate-x-1.5 transition-transform duration-300" />
@@ -487,7 +488,7 @@ export const Blog: React.FC = () => {
                       <Bookmark className="w-3.5 h-3.5 text-neutral-400 hover:text-brand-gold transition-colors" />
                     </div>
                   </div>
-                </article>
+                </Link>
               ))}
             </div>
 

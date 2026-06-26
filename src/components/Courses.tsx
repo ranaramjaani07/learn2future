@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { 
   Search, 
@@ -806,11 +807,10 @@ ${course.title}
           {currentCoursesSlice.map((course) => (
             <div 
               key={course.id}
-              className="group flex flex-col justify-between overflow-hidden rounded-2xl border border-neutral-200 dark:border-brand-border bg-white dark:bg-[#151515] hover:shadow-2xl hover:border-brand-gold/40 dark:hover:border-brand-gold/30 transition-all transform duration-300 pointer-events-auto cursor-pointer"
-              onClick={() => setCurrentPage("course-details", course.slug || course.id)}
+              className="group flex flex-col justify-between overflow-hidden rounded-2xl border border-neutral-200 dark:border-brand-border bg-white dark:bg-[#151515] hover:shadow-2xl hover:border-brand-gold/40 dark:hover:border-brand-gold/30 transition-all transform duration-300 pointer-events-auto"
             >
-              {/* Media Container */}
-              <div className="aspect-video relative bg-neutral-900 overflow-hidden shrink-0">
+              {/* Media Container with Link wrapper */}
+              <Link to={`/course/${course.slug || course.id}`} className="aspect-video relative bg-neutral-900 overflow-hidden shrink-0 block">
                 <img 
                   src={course.thumbnail || null} 
                   alt={`Course image for ${course.title} - ${course.category} educational training blueprint`}
@@ -829,6 +829,7 @@ ${course.title}
                 {/* Relocated float share to Top Right Corner */}
                 <button
                   onClick={(e) => {
+                    e.preventDefault();
                     e.stopPropagation();
                     handleShareClick(course);
                   }}
@@ -837,15 +838,17 @@ ${course.title}
                 >
                   <Share2 className="w-3.5 h-3.5 text-brand-gold" />
                 </button>
-              </div>
+              </Link>
 
               {/* Course Detail Container */}
               <div className="p-6 flex flex-col flex-grow justify-between space-y-6">
                 
                 <div className="space-y-4">
-                  <h3 className="font-display text-lg font-bold tracking-tight text-neutral-900 dark:text-white leading-snug group-hover:text-brand-gold transition-colors text-left">
-                    {course.title}
-                  </h3>
+                  <Link to={`/course/${course.slug || course.id}`} className="block">
+                    <h3 className="font-display text-lg font-bold tracking-tight text-neutral-900 dark:text-white leading-snug group-hover:text-brand-gold transition-colors text-left">
+                      {course.title}
+                    </h3>
+                  </Link>
                   <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed font-sans line-clamp-3 text-left">
                     {course.description}
                   </p>
@@ -859,7 +862,7 @@ ${course.title}
                     </span>
                   </div>
 
-                  <div className="flex gap-2 min-w-0" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex gap-2 min-w-0">
                     {user && hasPurchasedCourse(user.uid, course.id) ? (
                       <button
                         onClick={() => setCurrentPage("my-enrollments")}
@@ -869,12 +872,12 @@ ${course.title}
                         <span>Start Learning</span>
                       </button>
                     ) : (
-                      <button
-                        onClick={() => setCurrentPage("course-details", course.slug || course.id)}
-                        className="w-full font-display font-bold text-xs bg-black text-white dark:bg-brand-gold dark:text-black hover:bg-[#F5B300]/95 dark:hover:bg-[#F5B300]/90 hover:text-black py-3 px-6 rounded-xl transition-all scale-100 active:scale-95 duration-200"
+                      <Link
+                        to={`/course/${course.slug || course.id}`}
+                        className="w-full text-center font-display font-bold text-xs bg-black text-white dark:bg-brand-gold dark:text-black hover:bg-[#F5B300]/95 dark:hover:bg-[#F5B300]/90 hover:text-black py-3 px-6 rounded-xl transition-all scale-100 active:scale-95 duration-200 flex items-center justify-center"
                       >
                         View Details
-                      </button>
+                      </Link>
                     )}
                   </div>
                 </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { 
   ArrowRight, 
@@ -990,13 +991,13 @@ export const Home: React.FC = () => {
 
               {/* Call-to-actions */}
               <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
-                <button
-                  onClick={() => setCurrentPage("courses")}
+                <Link
+                  to="/courses"
                   className="w-full sm:w-auto font-display font-semibold text-black bg-brand-gold hover:bg-[#F5B300]/90 px-8 py-4 rounded-xl flex items-center justify-center space-x-2 shadow-xl hover:shadow-brand-gold/20 transition-all group scale-100 hover:scale-[1.02] duration-300 transform"
                 >
                   <span>{hpSettings?.ctaButtonText || "Explore Premium Courses"}</span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </button>
+                </Link>
                 
                 {globalSettings.telegramChannelLink && (
                   <a
@@ -1285,10 +1286,10 @@ export const Home: React.FC = () => {
           {categories.map((cat, idx) => {
             const IconComp = cat.icon;
             return (
-              <div 
+              <Link 
                 key={idx}
-                onClick={() => setCurrentPage("courses")}
-                className="group border border-neutral-200 dark:border-neutral-900 rounded-2xl p-6 bg-white dark:bg-[#151515] hover:border-brand-gold/60 dark:hover:border-brand-gold/30 hover:shadow-lg transition-all dark:hover:shadow-brand-gold/5 cursor-pointer flex flex-col space-y-4"
+                to="/courses"
+                className="group border border-neutral-200 dark:border-neutral-900 rounded-2xl p-6 bg-white dark:bg-[#151515] hover:border-brand-gold/60 dark:hover:border-brand-gold/30 hover:shadow-lg transition-all dark:hover:shadow-brand-gold/5 cursor-pointer flex flex-col space-y-4 text-left"
               >
                 <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${cat.color} flex items-center justify-center shrink-0`}>
                   <IconComp className="w-6 h-6" />
@@ -1301,11 +1302,11 @@ export const Home: React.FC = () => {
                     {cat.desc}
                   </p>
                 </div>
-                <div className="pt-2 flex items-center text-xs font-semibold text-brand-gold opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="pt-2 flex items-center text-xs font-semibold text-brand-gold opacity-0 group-hover:opacity-100 transition-opacity mt-auto">
                   <span>Browse modules</span>
                   <ArrowRight className="w-3 h-3 ml-1 group-hover:translate-x-1 transition-transform" />
                 </div>
-              </div>
+              </Link>
             );
           })}
         </div>
@@ -1324,13 +1325,13 @@ export const Home: React.FC = () => {
                 Featured Programs
               </h2>
             </div>
-            <button
-              onClick={() => setCurrentPage("courses")}
+            <Link
+              to="/courses"
               className="text-sm font-semibold text-brand-gold hover:text-[#F5B300]/80 flex items-center gap-1.5"
             >
               <span>View full catalog</span>
               <ArrowRight className="w-4 h-4" />
-            </button>
+            </Link>
           </div>
 
           {loading ? (
@@ -1344,8 +1345,8 @@ export const Home: React.FC = () => {
                   key={course.id ? `${course.id}-${idx}` : idx}
                   className="flex flex-col border border-neutral-200 dark:border-brand-border rounded-2xl bg-white dark:bg-[#151515] overflow-hidden hover:shadow-xl dark:hover:shadow-brand-gold/5 transition-all group lg:scale-100"
                 >
-                  {/* Thumbnail area */}
-                  <div className="aspect-video w-full overflow-hidden relative bg-neutral-900 shrink-0">
+                  {/* Thumbnail area with Link wrapper */}
+                  <Link to={`/course/${course.slug || course.id}`} className="aspect-video w-full overflow-hidden relative bg-neutral-900 shrink-0 block">
                     <img 
                       src={course.thumbnail} 
                       alt={course.title}
@@ -1357,21 +1358,23 @@ export const Home: React.FC = () => {
                     <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-md text-brand-gold text-[10px] font-mono font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full border border-brand-gold/20">
                       {course.category}
                     </div>
-                  </div>
+                  </Link>
 
                   {/* Core Description content */}
                   <div className="p-6 flex flex-col flex-grow justify-between space-y-4">
                     <div className="space-y-2">
-                      <h3 className="font-display text-lg font-bold text-neutral-900 dark:text-white group-hover:text-brand-gold transition-colors line-clamp-1">
-                        {course.title}
-                      </h3>
-                      <p className="text-xs text-neutral-500 dark:text-neutral-400 line-clamp-2 leading-relaxed">
+                      <Link to={`/course/${course.slug || course.id}`} className="block">
+                        <h3 className="font-display text-lg font-bold text-neutral-900 dark:text-white group-hover:text-brand-gold transition-colors line-clamp-1 text-left">
+                          {course.title}
+                        </h3>
+                      </Link>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400 line-clamp-2 leading-relaxed text-left">
                         {course.description}
                       </p>
                     </div>
 
                     <div className="pt-2 border-t border-neutral-100 dark:border-neutral-900/40 flex items-center justify-between">
-                      <div>
+                      <div className="text-left">
                         <span className="text-[10px] text-neutral-400 block font-mono">TUITION COST</span>
                         <span className="font-display text-xl font-bold text-brand-gold">
                           ₹{course.price.toLocaleString("en-IN") || course.price}
@@ -1386,13 +1389,13 @@ export const Home: React.FC = () => {
                           <ArrowRight className="w-3.5 h-3.5" />
                         </button>
                       ) : (
-                        <button
-                          onClick={() => setCurrentPage("courses")}
+                        <Link
+                          to={`/course/${course.slug || course.id}`}
                           className="bg-neutral-900 dark:bg-brand-gold text-white dark:text-black font-display font-bold text-xs py-2.5 px-4 rounded-lg hover:bg-brand-gold dark:hover:bg-[#F5B300]/80 hover:text-black transition-colors flex items-center gap-1.5"
                         >
                           Enroll Now
                           <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
+                        </Link>
                       )}
                     </div>
                   </div>
@@ -1901,13 +1904,13 @@ export const Home: React.FC = () => {
                 Latest Tech Insights
               </h2>
             </div>
-            <button
-              onClick={() => setCurrentPage("blog")}
+            <Link
+              to="/blog"
               className="text-sm font-semibold text-brand-gold hover:text-[#F5B300]/80 flex items-center gap-1.5 focus:outline-none"
             >
               <span>View all guides</span>
               <ArrowRight className="w-4 h-4" />
-            </button>
+            </Link>
           </div>
 
           {loadingBlogs ? (
@@ -1917,10 +1920,10 @@ export const Home: React.FC = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {latestBlogs.map((post, postIdx) => (
-                <div 
+                <Link 
                   key={post.id ? `${post.id}-${postIdx}` : (post.slug ? `${post.slug}-${postIdx}` : postIdx)}
-                  onClick={() => setCurrentPage("blog-details", post.slug)}
-                  className="flex flex-col border border-neutral-200 dark:border-brand-border rounded-2xl bg-white dark:bg-[#151515] overflow-hidden hover:shadow-xl dark:hover:shadow-brand-gold/5 transition-all group cursor-pointer"
+                  to={`/blog/${post.slug}`}
+                  className="flex flex-col border border-neutral-200 dark:border-brand-border rounded-2xl bg-white dark:bg-[#151515] overflow-hidden hover:shadow-xl dark:hover:shadow-brand-gold/5 transition-all group cursor-pointer text-left"
                 >
                   <div className="aspect-video w-full overflow-hidden relative bg-neutral-900 shrink-0">
                     <img 
@@ -1944,12 +1947,12 @@ export const Home: React.FC = () => {
                       </p>
                     </div>
 
-                    <div className="pt-3 border-t border-neutral-100 dark:border-neutral-900 flex items-center justify-between text-xs font-bold text-brand-gold group-hover:underline">
+                    <div className="pt-3 border-t border-neutral-100 dark:border-neutral-900 flex items-center justify-between text-xs font-bold text-brand-gold group-hover:underline mt-auto">
                       <span>Read Full Article</span>
                       <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}

@@ -234,7 +234,7 @@ function toFirestoreProto(obj: any): any {
 }
 
 interface FilterDesc {
-  type: 'where' | 'orderBy';
+  type: 'where' | 'orderBy' | 'limit';
   field?: string;
   op?: string;
   value?: any;
@@ -248,6 +248,7 @@ function buildStructuredQuery(collectionId: string, filters: FilterDesc[]) {
 
   const whereFilters: any[] = [];
   const orderBys: any[] = [];
+  let limitValue: number | undefined = undefined;
 
   for (const f of filters) {
     if (f.type === 'where' && f.field && f.op) {
@@ -276,6 +277,8 @@ function buildStructuredQuery(collectionId: string, filters: FilterDesc[]) {
         field: { fieldPath: f.field },
         direction
       });
+    } else if (f.type === 'limit') {
+      limitValue = f.value;
     }
   }
 
@@ -294,6 +297,10 @@ function buildStructuredQuery(collectionId: string, filters: FilterDesc[]) {
 
   if (orderBys.length > 0) {
     query.orderBy = orderBys;
+  }
+
+  if (typeof limitValue === "number") {
+    query.limit = limitValue;
   }
 
   return { structuredQuery: query };
@@ -321,6 +328,9 @@ function generateQueryMethods(colName: string, filters: any[]): any {
     },
     orderBy(field: string, direction: any) {
       return generateQueryMethods(colName, [...filters, { type: 'orderBy', field, direction }]);
+    },
+    limit(n: number) {
+      return generateQueryMethods(colName, [...filters, { type: 'limit', value: n }]);
     },
     async get() {
       try {
@@ -1515,13 +1525,120 @@ async function startServer() {
     const host = req.headers.host || "learn2future.vercel.app";
     const protocol = req.secure || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
     const baseUrl = host.includes("localhost") || host.includes(".run.app") ? `${protocol}://${host}` : "https://learn2future.vercel.app";
-    const robotsTxt = `User-agent: *
+    const robotsTxt = `# ====================================================================
+# Learn 2 Future - robots.txt (Enterprise SEO & GEO Optimization)
+# ====================================================================
+
+# Rule 1: Allow all standard Search Crawlers & Webmasters
+User-agent: Googlebot
 Allow: /
-Disallow: /admin-dashboard
 Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
 Disallow: /onboarding
 
+User-agent: Baiduspider
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+User-agent: Yandex
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+User-agent: Entireweb
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+# Rule 2: Allow all Generative AI & GEO Search Agents for advanced discovery
+User-agent: GPTBot
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+User-agent: Claude-Web
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+User-agent: Applebot-Extended
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+User-agent: Google-Extended
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+User-agent: perplexity
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+# Rule 3: General Fallback for all other agents
+User-agent: *
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+# Sitemaps & GEO References
 Sitemap: ${baseUrl}/sitemap.xml
+llms: ${baseUrl}/llms.txt
 `;
     res.status(200).set({ "Content-Type": "text/plain; charset=utf-8" }).send(robotsTxt);
   });

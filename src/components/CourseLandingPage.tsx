@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { 
   ArrowLeft, Star, Users, BookOpen, Clock, Award, Play, CheckCircle, 
@@ -666,12 +667,12 @@ export const CourseLandingPage: React.FC<{ previewCourse?: Course }> = ({ previe
           <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
             The curriculum you requested could not be retrieved. It may have been archived or updated.
           </p>
-          <button
-            onClick={() => setCurrentPage("courses")}
-            className="w-full bg-brand-gold text-black font-bold uppercase py-3 rounded-xl hover:bg-yellow-500 transition-colors"
+          <Link
+            to="/courses"
+            className="w-full bg-brand-gold text-black font-bold uppercase py-3 rounded-xl hover:bg-yellow-500 transition-colors block text-center"
           >
             Browse Other Courses
-          </button>
+          </Link>
         </div>
       </div>
     );
@@ -732,18 +733,18 @@ export const CourseLandingPage: React.FC<{ previewCourse?: Course }> = ({ previe
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 py-4 border-b border-neutral-200 dark:border-neutral-900">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setCurrentPage("courses")}
+            <Link
+              to="/courses"
               id="back-list-button-on-landing"
-              className="p-2 bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 border border-neutral-200 dark:border-neutral-800 rounded-full text-neutral-600 dark:text-neutral-400 dark:hover:text-white transition"
+              className="p-2 bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 border border-neutral-200 dark:border-neutral-800 rounded-full text-neutral-600 dark:text-neutral-400 dark:hover:text-white transition block"
               title="Return to list catalog"
             >
               <ArrowLeft className="w-5 h-5" />
-            </button>
+            </Link>
             <nav className="flex items-center gap-2 text-xs font-mono text-neutral-500">
-              <span className="hover:text-neutral-800 dark:hover:text-white hover:underline cursor-pointer" onClick={() => setCurrentPage("home")}>Home</span>
+              <Link className="hover:text-neutral-800 dark:hover:text-white hover:underline cursor-pointer" to="/">Home</Link>
               <span>/</span>
-              <span className="hover:text-neutral-800 dark:hover:text-white hover:underline cursor-pointer" onClick={() => setCurrentPage("courses")}>Courses</span>
+              <Link className="hover:text-neutral-800 dark:hover:text-white hover:underline cursor-pointer" to="/courses">Courses</Link>
               <span>/</span>
               <span className="text-brand-gold line-clamp-1 max-w-[200px]">{course.title}</span>
             </nav>
@@ -1317,20 +1318,20 @@ export const CourseLandingPage: React.FC<{ previewCourse?: Course }> = ({ previe
               <span className="text-[10px] font-mono text-brand-gold tracking-widest uppercase">Recommendations for growth</span>
               <h2 className="text-2xl sm:text-3xl font-black font-display uppercase text-neutral-900 dark:text-white">Explore Related Blueprints</h2>
             </div>
-            <button
-              onClick={() => setCurrentPage("courses")}
+            <Link
+              to="/courses"
               className="text-xs font-mono text-[#F5B300] hover:underline cursor-pointer"
             >
               View Full Catalog →
-            </button>
+            </Link>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {relatedCourses.map((c) => (
-              <div
+              <Link
                 key={c.id}
-                onClick={() => setCurrentPage("course-details", c.slug || c.id)}
-                className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 rounded-2xl overflow-hidden cursor-pointer hover:border-brand-gold/30 transition shadow-sm hover:shadow-md dark:shadow-none group flex flex-col h-full"
+                to={`/course/${c.slug || c.id}`}
+                className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 rounded-2xl overflow-hidden cursor-pointer hover:border-brand-gold/30 transition shadow-sm hover:shadow-md dark:shadow-none group flex flex-col h-full text-left"
               >
                 <div className="relative aspect-video overflow-hidden border-b border-neutral-200 dark:border-neutral-850">
                   <img src={c.thumbnail || null} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" alt={c.title} referrerPolicy="no-referrer" />
@@ -1352,7 +1353,7 @@ export const CourseLandingPage: React.FC<{ previewCourse?: Course }> = ({ previe
                     <span className="text-[10px] font-mono text-neutral-500 uppercase group-hover:text-neutral-900 dark:group-hover:text-white transition">Details →</span>
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </section>

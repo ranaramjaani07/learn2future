@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { collection, getDocs, query, where, limit } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { Blog as BlogType } from "../types";
@@ -404,12 +405,12 @@ export const BlogDetails: React.FC = () => {
         <p className="text-sm text-neutral-450">
           The requested guide could not be located inside our database. It may have been renamed or removed by an administrator.
         </p>
-        <button
-          onClick={() => setCurrentPage("blog")}
-          className="bg-brand-gold hover:bg-brand-gold/90 text-black font-bold text-xs py-3 px-6 rounded-xl transition-all"
+        <Link
+          to="/blog"
+          className="bg-brand-gold hover:bg-brand-gold/90 text-black font-bold text-xs py-3 px-6 rounded-xl transition-all block text-center w-full max-w-xs mx-auto"
         >
           Return to Blog Catalog
-        </button>
+        </Link>
       </div>
     );
   }
@@ -438,13 +439,13 @@ export const BlogDetails: React.FC = () => {
       <div className="max-w-4xl mx-auto px-6 space-y-12">
         
         {/* Back navigation */}
-        <button
-          onClick={() => setCurrentPage("blog")}
+        <Link
+          to="/blog"
           className="inline-flex items-center space-x-2.5 text-xs font-semibold text-neutral-500 dark:text-neutral-400 hover:text-brand-gold transition-colors select-none group focus:outline-none"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
           <span>Back to Blog Catalog</span>
-        </button>
+        </Link>
 
         {/* Article header metadata and Title */}
         <div className="space-y-6">
@@ -539,10 +540,10 @@ export const BlogDetails: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {related.map(item => (
-              <div 
+              <Link 
                 key={item.id} 
-                onClick={() => setCurrentPage("blog-details", item.slug)}
-                className="group flex flex-col justify-between p-5 bg-white dark:bg-[#111] rounded-2xl border border-neutral-100 dark:border-brand-border hover:border-neutral-250 dark:hover:border-neutral-800 hover:shadow-md cursor-pointer transition-all duration-350"
+                to={`/blog/${item.slug}`}
+                className="group flex flex-col justify-between p-5 bg-white dark:bg-[#111] rounded-2xl border border-neutral-100 dark:border-brand-border hover:border-neutral-250 dark:hover:border-neutral-800 hover:shadow-md cursor-pointer transition-all duration-350 text-left"
               >
                 <div className="space-y-3.5">
                   <div className="flex items-center justify-between text-[10px] font-mono text-neutral-450">
@@ -557,7 +558,7 @@ export const BlogDetails: React.FC = () => {
                   <span>Read Guide</span>
                   <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </div>

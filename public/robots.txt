@@ -1,8 +1,115 @@
+# ====================================================================
+# Learn 2 Future - robots.txt (Enterprise SEO & GEO Optimization)
+# ====================================================================
+
+# Rule 1: Allow all standard Search Crawlers & Webmasters
+User-agent: Googlebot
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+User-agent: Baiduspider
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+User-agent: Yandex
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+User-agent: Entireweb
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+# Rule 2: Allow all Generative AI & GEO Search Agents for advanced discovery
+User-agent: GPTBot
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+User-agent: Claude-Web
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+User-agent: Applebot-Extended
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+User-agent: Google-Extended
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+User-agent: perplexity
+Allow: /
+Disallow: /admin-login
+Disallow: /admin-dashboard
+Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
+
+# Rule 3: General Fallback for all other agents
 User-agent: *
 Allow: /
-Disallow: /admin/dashboard
+Disallow: /admin-login
+Disallow: /admin-dashboard
 Disallow: /admin/login
+Disallow: /admin/dashboard
+Disallow: /onboarding
 
-# Generative Engine Optimization index references
+# Sitemaps & GEO References
 Sitemap: https://learn2future.vercel.app/sitemap.xml
 llms: https://learn2future.vercel.app/llms.txt
+
