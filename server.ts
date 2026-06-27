@@ -480,6 +480,33 @@ const adminDb = {
           }
         };
       },
+      async add(data: any) {
+        try {
+          const url = `${REST_BASE_URL}/${colName}?key=${REST_API_KEY}`;
+          const body = toFirestoreProto(data);
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+          });
+          if (!response.ok) {
+            const text = await response.text();
+            if (response.status === 429) {
+              isServerQuotaExceeded = true;
+            }
+            throw new Error(`REST add failed: ${response.status} ${text}`);
+          }
+          const resJson = await response.json();
+          const docId = resJson.name?.split("/").pop() || "";
+          return {
+            id: docId,
+            ...resJson
+          };
+        } catch (err: any) {
+          logServerFirestoreError(`Add failed on collection ${colName}`, err);
+          throw err;
+        }
+      },
       ...generateQueryMethods(colName, [])
     };
   }

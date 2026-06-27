@@ -38,6 +38,22 @@
   ],
   "rewrites": [
     {
+      "source": "/ixfm9d83np3zq7qhq7py8uzp463wxi",
+      "destination": "/ixfm9d83np3zq7qhq7py8uzp463wxi.html"
+    },
+    {
+      "source": "/ixfm9d83np3zq7qhq7py8uzp463wxi/",
+      "destination": "/ixfm9d83np3zq7qhq7py8uzp463wxi.html"
+    },
+    {
+      "source": "/google6137fd0ecd2db4b0",
+      "destination": "/google6137fd0ecd2db4b0.html"
+    },
+    {
+      "source": "/google6137fd0ecd2db4b0/",
+      "destination": "/google6137fd0ecd2db4b0.html"
+    },
+    {
       "source": "/api/:path*",
       "destination": "/api/:path*"
     },
@@ -66,7 +82,10 @@
       "destination": "/api/sitemap?type=images"
     },
     {
-      "source": "/((?!api/).*)",
+      "handle": "filesystem"
+    },
+    {
+      "source": "/((?!api/|sitemap).*)",
       "destination": "/index.html"
     }
   ],
