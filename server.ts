@@ -560,9 +560,10 @@ async function ensureDefaultSettings() {
     
     // Seed Blog 1: What Is Learn2Future
     const blog1Slug = "what-is-learn2future-affordable-skill-education-india";
-    const blog1Snap = await blogsCol.where("slug", "==", blog1Slug).limit(1).get();
-    if (blog1Snap.empty) {
-      await blogsCol.add({
+    const blog1Ref = blogsCol.doc(blog1Slug);
+    const blog1Snap = await blog1Ref.get();
+    if (!blog1Snap.exists) {
+      await blog1Ref.set({
         title: "What Is Learn2Future? The Mission Behind Affordable Skill Education in India",
         slug: blog1Slug,
         metaTitle: "What Is Learn2Future? Affordable Skill Education in India",
@@ -581,9 +582,10 @@ async function ensureDefaultSettings() {
 
     // Seed Blog 2: Why Learn2Future Exists
     const blog2Slug = "why-learn2future-exists-affordable-skill-education";
-    const blog2Snap = await blogsCol.where("slug", "==", blog2Slug).limit(1).get();
-    if (blog2Snap.empty) {
-      await blogsCol.add({
+    const blog2Ref = blogsCol.doc(blog2Slug);
+    const blog2Snap = await blog2Ref.get();
+    if (!blog2Snap.exists) {
+      await blog2Ref.set({
         title: "Why Learn2Future Exists: The Mission Behind Affordable Skill Education",
         slug: blog2Slug,
         metaTitle: "Why Learn2Future Exists: Affordable Skill Education",

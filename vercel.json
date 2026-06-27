@@ -82,9 +82,6 @@
       "destination": "/api/sitemap?type=images"
     },
     {
-      "handle": "filesystem"
-    },
-    {
       "source": "/((?!api/|sitemap).*)",
       "destination": "/index.html"
     }
