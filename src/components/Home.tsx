@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { SEO } from "./SEO";
 import { useApp } from "../context/AppContext";
 import { 
   ArrowRight, 
@@ -832,6 +833,12 @@ export const Home: React.FC = () => {
 
   return (
     <div className="space-y-24 pb-20 animate-in fade-in duration-500">
+      <SEO 
+        title="Learn Today. Earn Tomorrow."
+        description="Acquire future-ready credentials and join an active community of 10,000+ continuous digital earners. Highly actionable courses in AI agents, high-ticket freelancing, and viral media."
+        keywords="learn2future, future skills, high ticket freelancing, learn to future, artificial intelligence training, digital income, learn today earn tomorrow"
+        url="https://learn2future.vercel.app/"
+      />
       
       {/* Embedded Keyframes for Elite center-relative Orbit Rotations */}
       <style dangerouslySetInnerHTML={{__html: `

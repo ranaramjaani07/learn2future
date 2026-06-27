@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { SEO } from "./SEO";
 import { useApp } from "../context/AppContext";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
@@ -228,6 +229,15 @@ export const ThankYou: React.FC = () => {
 
   return (
     <div id="thank-you-view" className="min-h-screen bg-[#050505] text-white py-12 px-4 sm:px-6 lg:px-8 font-sans antialiased relative selection:bg-[#F5B300]/20 select-none overflow-x-hidden">
+      <SEO 
+        title="Order Success & Confirmation"
+        description="Your order was submitted successfully! Our audit guides are checking your payment credentials to unlock your Enrollment Vault licenses."
+        url="https://learn2future.vercel.app/thank-you"
+        breadcrumbs={[
+          { name: "Home", item: "/" },
+          { name: "Thank You", item: "/thank-you" }
+        ]}
+      />
       
       {/* Background Ambience Lines */}
       <div className="absolute inset-0 pointer-events-none opacity-[0.03]">

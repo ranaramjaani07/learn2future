@@ -10,6 +10,7 @@ import { collection, getDocs, addDoc, doc, setDoc, query, where, deleteDoc, upda
 import { db } from "../firebase";
 import { Course, Review } from "../types";
 import { SEO } from "./SEO";
+import { Breadcrumbs, RelatedCourses } from "./SEOComponents";
 
 interface RichTextRendererProps {
   text: string;
@@ -703,6 +704,7 @@ export const CourseLandingPage: React.FC<{ previewCourse?: Course }> = ({ previe
           { name: "Courses", item: "/courses" },
           { name: course.title, item: `/course/${course.slug}` }
         ]}
+        courseData={course}
       />
 
       {/* Floating CTA Banner for conversion (sticky on bottom for mobile/desktop scrolling once deep in details) */}
@@ -741,13 +743,11 @@ export const CourseLandingPage: React.FC<{ previewCourse?: Course }> = ({ previe
             >
               <ArrowLeft className="w-5 h-5" />
             </Link>
-            <nav className="flex items-center gap-2 text-xs font-mono text-neutral-500">
-              <Link className="hover:text-neutral-800 dark:hover:text-white hover:underline cursor-pointer" to="/">Home</Link>
-              <span>/</span>
-              <Link className="hover:text-neutral-800 dark:hover:text-white hover:underline cursor-pointer" to="/courses">Courses</Link>
-              <span>/</span>
-              <span className="text-brand-gold line-clamp-1 max-w-[200px]">{course.title}</span>
-            </nav>
+            <Breadcrumbs items={[
+              { name: "Home", item: "/" },
+              { name: "Courses", item: "/courses" },
+              { name: course.title, item: `/course/${course.slug}` }
+            ]} />
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -945,9 +945,9 @@ export const CourseLandingPage: React.FC<{ previewCourse?: Course }> = ({ previe
               <span>Program curriculum blueprint</span>
             </h2>
             
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold font-display uppercase tracking-tight text-neutral-900 dark:text-white leading-tight">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold font-display uppercase tracking-tight text-neutral-900 dark:text-white leading-tight">
               {course.title} Syllabus
-            </h1>
+            </h2>
             
             <h3 className="text-neutral-600 dark:text-neutral-350 text-xs sm:text-sm font-semibold tracking-wide flex items-center gap-2 bg-neutral-100 dark:bg-neutral-900/50 py-2 px-3 rounded-lg border border-neutral-200/50 dark:border-brand-border/10">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
@@ -1311,53 +1311,22 @@ export const CourseLandingPage: React.FC<{ previewCourse?: Course }> = ({ previe
       </section>
 
       {/* 7. Related Courses & Upsells */}
-      {relatedCourses.length > 0 && (
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between border-b border-neutral-200 dark:border-neutral-900 pb-5 mb-10 gap-4">
-            <div>
-              <span className="text-[10px] font-mono text-brand-gold tracking-widest uppercase">Recommendations for growth</span>
-              <h2 className="text-2xl sm:text-3xl font-black font-display uppercase text-neutral-900 dark:text-white">Explore Related Blueprints</h2>
-            </div>
-            <Link
-              to="/courses"
-              className="text-xs font-mono text-[#F5B300] hover:underline cursor-pointer"
-            >
-              View Full Catalog →
-            </Link>
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between border-b border-neutral-200 dark:border-neutral-900 pb-5 mb-10 gap-4">
+          <div>
+            <span className="text-[10px] font-mono text-brand-gold tracking-widest uppercase">Recommendations for growth</span>
+            <h2 className="text-2xl sm:text-3xl font-black font-display uppercase text-neutral-900 dark:text-white">Explore Related Blueprints</h2>
           </div>
+          <Link
+            to="/courses"
+            className="text-xs font-mono text-[#F5B300] hover:underline cursor-pointer"
+          >
+            View Full Catalog →
+          </Link>
+        </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {relatedCourses.map((c) => (
-              <Link
-                key={c.id}
-                to={`/course/${c.slug || c.id}`}
-                className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 rounded-2xl overflow-hidden cursor-pointer hover:border-brand-gold/30 transition shadow-sm hover:shadow-md dark:shadow-none group flex flex-col h-full text-left"
-              >
-                <div className="relative aspect-video overflow-hidden border-b border-neutral-200 dark:border-neutral-850">
-                  <img src={c.thumbnail || null} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" alt={c.title} referrerPolicy="no-referrer" />
-                  <span className="absolute top-3 left-3 bg-neutral-950/80 border border-neutral-800 text-[10px] font-mono text-brand-gold py-1 px-2.5 rounded-md">
-                    {c.category}
-                  </span>
-                </div>
-                <div className="p-5 flex-1 flex flex-col justify-between">
-                  <div className="space-y-2">
-                    <h3 className="font-bold text-sm font-display text-neutral-900 dark:text-white text-left group-hover:text-brand-gold line-clamp-1 transition-colors">
-                      {c.title}
-                    </h3>
-                    <p className="text-[11px] text-neutral-600 dark:text-neutral-400 line-clamp-2 text-left">
-                      {c.description}
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between pt-4 border-t border-neutral-200 dark:border-neutral-850 mt-4">
-                    <span className="text-sm font-bold font-display text-brand-gold">₹{c.price.toLocaleString()}</span>
-                    <span className="text-[10px] font-mono text-neutral-500 uppercase group-hover:text-neutral-900 dark:group-hover:text-white transition">Details →</span>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
+        <RelatedCourses currentCourseId={course.id} category={course.category} />
+      </section>
 
       {/* Trust Badges bottom line */}
       <section className="bg-neutral-100 dark:bg-neutral-950 border-t border-neutral-200 dark:border-neutral-900 py-10">

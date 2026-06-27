@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { SEO } from "./SEO";
 import { useApp } from "../context/AppContext";
 import { 
   ShoppingBag, Trash2, Plus, Minus, ArrowRight, ShieldCheck, 
@@ -840,6 +841,15 @@ export const CartPage: React.FC = () => {
   if (cart.length === 0 && checkoutStep !== "success") {
     return (
       <div className="min-h-[calc(100vh-80px)] bg-neutral-950 flex flex-col justify-center items-center p-6 text-white font-sans animate-in fade-in duration-300">
+        <SEO 
+          title="Your Shopping Cart is Empty"
+          description="Your educational shopping cart is currently empty. Explore our courses catalog to find future-tech skills training."
+          url="https://learn2future.vercel.app/cart"
+          breadcrumbs={[
+            { name: "Home", item: "/" },
+            { name: "Cart", item: "/cart" }
+          ]}
+        />
         <div className="max-w-md w-full bg-[#0d0d0d] border border-neutral-900 rounded-3xl p-8 sm:p-10 text-center space-y-6 relative overflow-hidden shadow-2xl">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-brand-gold/5 blur-3xl rounded-full" />
           <div className="w-16 h-16 bg-brand-gold/10 border border-brand-gold/25 rounded-full flex items-center justify-center mx-auto text-brand-gold">
@@ -866,6 +876,16 @@ export const CartPage: React.FC = () => {
 
   return (
     <div className="min-h-[calc(100vh-80px)] bg-neutral-950 text-white font-sans text-left relative overflow-hidden py-10">
+      <SEO 
+        title="Secure Checkout & Order Cart"
+        description="Verify your selected course blueprint licenses, configure your credentials dispatch, and complete your purchase securely."
+        keywords="shopping cart, course checkout, learn2future cart, upi payments"
+        url="https://learn2future.vercel.app/cart"
+        breadcrumbs={[
+          { name: "Home", item: "/" },
+          { name: "Cart", item: "/cart" }
+        ]}
+      />
       
       {/* Visual background luxury blur accents layout */}
       <div className="absolute top-1/4 left-1/3 w-96 h-96 bg-brand-gold/5 blur-3xl rounded-full pointer-events-none" />

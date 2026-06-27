@@ -9,8 +9,14 @@ export const Privacy: React.FC = () => {
   return (
     <div className="py-12 md:py-20 bg-neutral-50 dark:bg-[#000000] transition-colors duration-300">
       <SEO 
-        title="Privacy Policy - Learn 2 Future" 
-        description="Learn 2 Future Privacy Policy, data collection standards, security protocols, and third-party details." 
+        title="Privacy Policy & Data Security" 
+        description="Read our complete privacy statement detailing our user database encryption standards, cookies usage, and manual payment verification security audits." 
+        keywords="privacy policy, learn2future privacy, student data protection, data security policies"
+        url="https://learn2future.vercel.app/privacy"
+        breadcrumbs={[
+          { name: "Home", item: "/" },
+          { name: "Privacy Policy", item: "/privacy" }
+        ]}
       />
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">

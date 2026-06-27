@@ -224,9 +224,7 @@ export default async function handler(req, res) {
 }
 
 async function enrollUser({ userId, courseId, razorpay_order_id, razorpay_payment_id, isSimulated, meta }) {
-  const orderId = isSimulated
-    ? "ord_sim_" + Date.now().toString().slice(-8)
-    : "ord_rzp_" + Date.now().toString().slice(-7) + Math.random().toString(36).slice(2, 5);
+  const orderId = razorpay_order_id;
 
   const cartItems = Array.isArray(meta.cartItems) ? meta.cartItems : [];
   const enrolledIds = [];
@@ -256,7 +254,7 @@ async function enrollUser({ userId, courseId, razorpay_order_id, razorpay_paymen
       }
     } catch (_) {}
 
-    const purchaseId = "pur_rzp_" + Date.now().toString().slice(-7) + Math.random().toString(36).slice(2, 6);
+    const purchaseId = "pur_" + orderId + "_" + pid;
     await firestoreSet("userPurchases", purchaseId, {
       userId,
       productId: pid,

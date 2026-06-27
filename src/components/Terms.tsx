@@ -9,8 +9,14 @@ export const Terms: React.FC = () => {
   return (
     <div className="py-12 md:py-20 bg-neutral-50 dark:bg-[#000000] transition-colors duration-300">
       <SEO 
-        title="Terms & Conditions - Learn 2 Future" 
-        description="Learn 2 Future legal terms, user responsibilities, policy details and license agreements." 
+        title="Terms of Service & Licensing" 
+        description="Review our standard student license agreement, payment audit rules, and refund policy conditions before accessing our premium future-tech modules." 
+        keywords="terms of service, learn2future terms, student license agreement, course usage guidelines"
+        url="https://learn2future.vercel.app/terms"
+        breadcrumbs={[
+          { name: "Home", item: "/" },
+          { name: "Terms", item: "/terms" }
+        ]}
       />
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">

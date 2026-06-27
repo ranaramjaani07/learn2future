@@ -14,6 +14,8 @@ import { Blog } from "./components/Blog";
 import { BlogDetails } from "./components/BlogDetails";
 import { Terms } from "./components/Terms";
 import { Privacy } from "./components/Privacy";
+import { RefundPolicy } from "./components/RefundPolicy";
+import { AffiliateInfo } from "./components/AffiliateInfo";
 import { Onboarding } from "./components/Onboarding";
 import { CartPage } from "./components/CartPage";
 import { ThankYou } from "./components/ThankYou";
@@ -194,6 +196,9 @@ const MainLayout: React.FC = () => {
               <Route path="/blog/:slug" element={<BlogDetails />} />
               <Route path="/terms" element={<Terms />} />
               <Route path="/privacy" element={<Privacy />} />
+              <Route path="/refund-policy" element={<RefundPolicy />} />
+              <Route path="/refund" element={<Navigate to="/refund-policy" replace />} />
+              <Route path="/affiliate" element={<AffiliateInfo />} />
               <Route path="/cart" element={<CartPage />} />
               <Route path="/thank-you" element={<ThankYou />} />
               <Route path="/student-portfolio" element={<StudentPortfolio />} />

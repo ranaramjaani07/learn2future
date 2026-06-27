@@ -67,7 +67,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
-export type CurrentPage = "home" | "courses" | "about" | "contact" | "admin-login" | "admin-dashboard" | "my-enrollments" | "blog" | "blog-details" | "terms" | "privacy" | "onboarding" | "cart" | "thank-you" | "course-details" | "student-portfolio";
+export type CurrentPage = "home" | "courses" | "about" | "contact" | "admin-login" | "admin-dashboard" | "my-enrollments" | "blog" | "blog-details" | "terms" | "privacy" | "onboarding" | "cart" | "thank-you" | "course-details" | "student-portfolio" | "refund-policy" | "affiliate";
 
 export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   upiId: "digitalcoursesbay@upi",
@@ -419,6 +419,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       targetPath = "/terms";
     } else if (page === "privacy") {
       targetPath = "/privacy";
+    } else if (page === "refund-policy") {
+      targetPath = "/refund-policy";
+    } else if (page === "affiliate") {
+      targetPath = "/affiliate";
     } else if (page === "cart") {
       targetPath = "/cart";
     } else if (page === "thank-you") {

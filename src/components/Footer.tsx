@@ -93,7 +93,15 @@ export const Footer: React.FC = () => {
                   to="/about"
                   className="text-sm font-medium text-neutral-500 dark:text-neutral-400 hover:text-brand-gold transition-colors"
                 >
-                  Our Philosophy
+                  Our Philosophy & FAQ
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/affiliate"
+                  className="text-sm font-medium text-neutral-500 dark:text-neutral-400 hover:text-brand-gold transition-colors"
+                >
+                  Affiliate Program
                 </Link>
               </li>
               <li>
@@ -151,6 +159,12 @@ export const Footer: React.FC = () => {
               className="text-xs text-neutral-400 dark:text-neutral-500 hover:text-brand-gold transition-colors font-mono uppercase"
             >
               Privacy Policy
+            </Link>
+            <Link 
+              to="/refund-policy"
+              className="text-xs text-neutral-400 dark:text-neutral-500 hover:text-brand-gold transition-colors font-mono uppercase"
+            >
+              Refund Policy
             </Link>
             <Link 
               to="/admin-login"

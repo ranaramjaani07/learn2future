@@ -5,6 +5,7 @@ import { db, handleFirestoreError, OperationType } from "../firebase";
 import { Blog as BlogType } from "../types";
 import { useApp } from "../context/AppContext";
 import { SEO } from "./SEO";
+import { Breadcrumbs, RelatedBlogs } from "./SEOComponents";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { 
   ArrowLeft, 
@@ -434,18 +435,26 @@ export const BlogDetails: React.FC = () => {
           { name: "Blog", item: "/blogs" },
           { name: blog.title, item: `/blog/${blog.slug}` }
         ]}
+        blogData={blog}
       />
 
       <div className="max-w-4xl mx-auto px-6 space-y-12">
         
         {/* Back navigation */}
-        <Link
-          to="/blog"
-          className="inline-flex items-center space-x-2.5 text-xs font-semibold text-neutral-500 dark:text-neutral-400 hover:text-brand-gold transition-colors select-none group focus:outline-none"
-        >
-          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-          <span>Back to Blog Catalog</span>
-        </Link>
+        <div className="flex flex-col gap-2">
+          <Link
+            to="/blog"
+            className="inline-flex items-center space-x-2.5 text-xs font-semibold text-neutral-500 dark:text-neutral-400 hover:text-brand-gold transition-colors select-none group focus:outline-none"
+          >
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+            <span>Back to Blog Catalog</span>
+          </Link>
+          <Breadcrumbs items={[
+            { name: "Home", item: "/" },
+            { name: "Blog", item: "/blog" },
+            { name: blog.title, item: `/blog/${blog.slug}` }
+          ]} />
+        </div>
 
         {/* Article header metadata and Title */}
         <div className="space-y-6">
@@ -538,29 +547,7 @@ export const BlogDetails: React.FC = () => {
             <h3 className="font-display text-lg font-bold text-neutral-900 dark:text-white">Related Resources</h3>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {related.map(item => (
-              <Link 
-                key={item.id} 
-                to={`/blog/${item.slug}`}
-                className="group flex flex-col justify-between p-5 bg-white dark:bg-[#111] rounded-2xl border border-neutral-100 dark:border-brand-border hover:border-neutral-250 dark:hover:border-neutral-800 hover:shadow-md cursor-pointer transition-all duration-350 text-left"
-              >
-                <div className="space-y-3.5">
-                  <div className="flex items-center justify-between text-[10px] font-mono text-neutral-450">
-                    <span>{item.category}</span>
-                    <span>{item.publishDate}</span>
-                  </div>
-                  <h4 className="font-display text-xs sm:text-sm font-bold text-neutral-950 dark:text-white leading-snug line-clamp-2 group-hover:text-brand-gold transition-colors">
-                    {item.title}
-                  </h4>
-                </div>
-                <div className="flex items-center space-x-1 text-[10px] font-mono text-brand-gold pt-3 border-t border-neutral-50 dark:border-neutral-900 mt-4 font-bold">
-                  <span>Read Guide</span>
-                  <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                </div>
-              </Link>
-            ))}
-          </div>
+          <RelatedBlogs currentBlogSlug={blog.slug} category={blog.category} />
         </div>
 
       </div>

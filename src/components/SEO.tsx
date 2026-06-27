@@ -10,10 +10,12 @@ interface SEOProps {
   author?: string;
   publishDate?: string;
   canonicalUrl?: string;
-  type?: "website" | "article" | "course";
+  type?: "website" | "article" | "course" | "contact" | "about" | "privacy" | "terms" | "refund" | "affiliate" | "collection" | "faq";
   faqs?: { question: string; answer: string }[];
   reviews?: { author: string; rating: number; body: string }[];
   breadcrumbs?: { name: string; item: string }[];
+  courseData?: any;
+  blogData?: any;
 }
 
 export const SEO: React.FC<SEOProps> = ({
@@ -29,6 +31,8 @@ export const SEO: React.FC<SEOProps> = ({
   faqs,
   reviews,
   breadcrumbs,
+  courseData,
+  blogData,
 }) => {
   useDocumentMetadata({
     title,
@@ -43,6 +47,8 @@ export const SEO: React.FC<SEOProps> = ({
     faqs,
     reviews,
     breadcrumbs,
+    courseData,
+    blogData,
   });
 
   return null; // Side-effect only component

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { SEO } from "./SEO";
 import { 
   Compass, 
   Eye, 
@@ -98,6 +99,18 @@ export const About: React.FC = () => {
 
   return (
     <div className="space-y-24 pb-20 animate-in fade-in duration-300">
+      <SEO 
+        title="About Our Mandate & Collective"
+        description="Learn 2 Future is a dedicated e-learning collective bridging the divide between theory and hyper-active digital cash flow. Discover our vision and peer-to-peer student support."
+        keywords="about learn2future, digital earnings, learn to future, continuous earner collective, high-ticket freelancing"
+        url="https://learn2future.vercel.app/about"
+        type="about"
+        breadcrumbs={[
+          { name: "Home", item: "/" },
+          { name: "About Us", item: "/about" }
+        ]}
+        faqs={faqs}
+      />
       
       {/* HEADER HERO segment */}
       <section className="relative text-center max-w-4xl mx-auto px-4 pt-12 md:pt-16 space-y-4">

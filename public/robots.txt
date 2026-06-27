@@ -2,7 +2,7 @@
 # Learn 2 Future - robots.txt (Enterprise SEO & GEO Optimization)
 # ====================================================================
 
-# Rule 1: Allow all standard Search Crawlers & Webmasters
+# Standard Search Crawlers & Webmasters
 User-agent: Googlebot
 Allow: /
 Disallow: /admin-login
@@ -10,6 +10,9 @@ Disallow: /admin-dashboard
 Disallow: /admin/login
 Disallow: /admin/dashboard
 Disallow: /onboarding
+Disallow: /cart
+Disallow: /thank-you
+Disallow: /my-enrollments
 
 User-agent: Baiduspider
 Allow: /
@@ -18,6 +21,9 @@ Disallow: /admin-dashboard
 Disallow: /admin/login
 Disallow: /admin/dashboard
 Disallow: /onboarding
+Disallow: /cart
+Disallow: /thank-you
+Disallow: /my-enrollments
 
 User-agent: Yandex
 Allow: /
@@ -26,16 +32,11 @@ Disallow: /admin-dashboard
 Disallow: /admin/login
 Disallow: /admin/dashboard
 Disallow: /onboarding
+Disallow: /cart
+Disallow: /thank-you
+Disallow: /my-enrollments
 
-User-agent: Entireweb
-Allow: /
-Disallow: /admin-login
-Disallow: /admin-dashboard
-Disallow: /admin/login
-Disallow: /admin/dashboard
-Disallow: /onboarding
-
-# Rule 2: Allow all Generative AI & GEO Search Agents for advanced discovery
+# Generative AI & GEO Search Agents for advanced discovery & AI Overviews
 User-agent: GPTBot
 Allow: /
 Disallow: /admin-login
@@ -43,6 +44,9 @@ Disallow: /admin-dashboard
 Disallow: /admin/login
 Disallow: /admin/dashboard
 Disallow: /onboarding
+Disallow: /cart
+Disallow: /thank-you
+Disallow: /my-enrollments
 
 User-agent: ChatGPT-User
 Allow: /
@@ -51,6 +55,9 @@ Disallow: /admin-dashboard
 Disallow: /admin/login
 Disallow: /admin/dashboard
 Disallow: /onboarding
+Disallow: /cart
+Disallow: /thank-you
+Disallow: /my-enrollments
 
 User-agent: ClaudeBot
 Allow: /
@@ -59,14 +66,9 @@ Disallow: /admin-dashboard
 Disallow: /admin/login
 Disallow: /admin/dashboard
 Disallow: /onboarding
-
-User-agent: Claude-Web
-Allow: /
-Disallow: /admin-login
-Disallow: /admin-dashboard
-Disallow: /admin/login
-Disallow: /admin/dashboard
-Disallow: /onboarding
+Disallow: /cart
+Disallow: /thank-you
+Disallow: /my-enrollments
 
 User-agent: OAI-SearchBot
 Allow: /
@@ -75,14 +77,9 @@ Disallow: /admin-dashboard
 Disallow: /admin/login
 Disallow: /admin/dashboard
 Disallow: /onboarding
-
-User-agent: Applebot-Extended
-Allow: /
-Disallow: /admin-login
-Disallow: /admin-dashboard
-Disallow: /admin/login
-Disallow: /admin/dashboard
-Disallow: /onboarding
+Disallow: /cart
+Disallow: /thank-you
+Disallow: /my-enrollments
 
 User-agent: Google-Extended
 Allow: /
@@ -91,6 +88,9 @@ Disallow: /admin-dashboard
 Disallow: /admin/login
 Disallow: /admin/dashboard
 Disallow: /onboarding
+Disallow: /cart
+Disallow: /thank-you
+Disallow: /my-enrollments
 
 User-agent: perplexity
 Allow: /
@@ -99,8 +99,11 @@ Disallow: /admin-dashboard
 Disallow: /admin/login
 Disallow: /admin/dashboard
 Disallow: /onboarding
+Disallow: /cart
+Disallow: /thank-you
+Disallow: /my-enrollments
 
-# Rule 3: General Fallback for all other agents
+# General Fallback for all other agents
 User-agent: *
 Allow: /
 Disallow: /admin-login
@@ -108,8 +111,10 @@ Disallow: /admin-dashboard
 Disallow: /admin/login
 Disallow: /admin/dashboard
 Disallow: /onboarding
+Disallow: /cart
+Disallow: /thank-you
+Disallow: /my-enrollments
 
-# Sitemaps & GEO References
+# Master XML Sitemap Index
 Sitemap: https://learn2future.vercel.app/sitemap.xml
 llms: https://learn2future.vercel.app/llms.txt
-

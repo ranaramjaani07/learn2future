@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { SEO } from "./SEO";
 import { 
   Send as TelegramIcon, 
   Instagram, 
@@ -63,6 +64,17 @@ export const Contact: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-16 animate-in fade-in duration-305">
+      <SEO 
+        title="Contact Technical Support & Learning Guides"
+        description="Have questions about our course licenses, payment audits, or Telegram community invites? Send a message to our support desk or reach us directly on Telegram."
+        keywords="contact learn2future, support learn2future, digital courses support, upi payment help"
+        url="https://learn2future.vercel.app/contact"
+        type="contact"
+        breadcrumbs={[
+          { name: "Home", item: "/" },
+          { name: "Contact", item: "/contact" }
+        ]}
+      />
       
       {/* Intro Header */}
       <div className="text-center space-y-3">

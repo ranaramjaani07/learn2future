@@ -59,7 +59,10 @@ import {
   Percent,
   Users,
   Copy,
-  RefreshCw
+  RefreshCw,
+  CheckSquare,
+  Trash2,
+  ShoppingCart
 } from "lucide-react";
 import { 
   collection, 
@@ -240,6 +243,7 @@ export const AdminDashboard: React.FC = () => {
   // Collections States
   const [courses, setCourses] = useState<Course[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [orderStatusFilter, setOrderStatusFilter] = useState<string>("all");
   const [contactMsgs, setContactMsgs] = useState<ContactMessage[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -1058,6 +1062,7 @@ export const AdminDashboard: React.FC = () => {
   const [allCartItemsList, setAllCartItemsList] = useState<any[]>([]);
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [viewingCrmUser, setViewingCrmUser] = useState<any | null>(null);
+  const [viewingCartUser, setViewingCartUser] = useState<any | null>(null);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [backfillingProgress, setBackfillingProgress] = useState(false);
 
@@ -2710,6 +2715,83 @@ export const AdminDashboard: React.FC = () => {
       isDanger: true,
       onConfirm: async () => {
         await executeDeleteOrder(orderId);
+        setConfirmModal(null);
+      }
+    });
+  };
+
+  // Accept All Pending Orders bulk handler
+  const handleAcceptAllPending = () => {
+    const pendingCount = orders.filter(o => o.status?.toLowerCase() === "pending").length;
+    if (pendingCount === 0) {
+      showToast("No pending orders available to accept.");
+      return;
+    }
+    setConfirmModal({
+      isOpen: true,
+      title: "Accept All Pending Orders",
+      message: `Are you sure you want to approve/accept all ${pendingCount} pending orders? This will grant course access to all matching customers simultaneously.`,
+      confirmLabel: "Accept All Pending",
+      isDanger: false,
+      onConfirm: async () => {
+        const pendingOrders = orders.filter(o => o.status?.toLowerCase() === "pending");
+        showToast(`Processing approval of ${pendingOrders.length} orders...`);
+        try {
+          const promises = pendingOrders.map(o => updateOrderStatus(o.id || "", "approved"));
+          await Promise.all(promises);
+          showToast(`Successfully accepted all ${pendingCount} pending orders!`);
+        } catch (err: any) {
+          console.error("Bulk accept pending orders error:", err);
+          showToast(`Error during bulk approval: ${err.message || String(err)}`);
+        }
+        setConfirmModal(null);
+      }
+    });
+  };
+
+  // Delete All Orders bulk handler
+  const handleDeleteAllOrders = () => {
+    if (orders.length === 0) {
+      showToast("No orders available to delete.");
+      return;
+    }
+    setConfirmModal({
+      isOpen: true,
+      title: "🚨 Permanent Deletion of All Orders",
+      message: `CRITICAL WARNING: This will permanently delete ALL ${orders.length} orders from the database and revoke all user enrollments! This action is irreversible. Are you absolutely certain?`,
+      confirmLabel: "Delete All Orders",
+      isDanger: true,
+      onConfirm: async () => {
+        showToast("Deleting all orders and user enrollments...");
+        try {
+          if (user?.uid === "demo_admin_uid") {
+            localStorage.setItem("demo_orders", JSON.stringify([]));
+            await fetchAllAdminData();
+            showToast("Successfully cleared all mock orders!");
+            setConfirmModal(null);
+            return;
+          }
+          // Real Firebase Delete
+          const deletePromises = orders.map(async (o) => {
+            // Delete associated userPurchases
+            try {
+              const qPurchases = query(collection(db, "userPurchases"), where("orderId", "==", o.id));
+              const purchasesSnap = await getDocs(qPurchases);
+              const subDelPromises = purchasesSnap.docs.map(pDoc => deleteDoc(doc(db, "userPurchases", pDoc.id)));
+              await Promise.all(subDelPromises);
+            } catch (pErr) {
+              console.warn(`Error deleting purchases for order ${o.id}:`, pErr);
+            }
+            // Delete order doc
+            await deleteDoc(doc(db, "orders", o.id));
+          });
+          await Promise.all(deletePromises);
+          await fetchAllAdminData();
+          showToast(`Successfully deleted all ${orders.length} orders and associated enrollments!`);
+        } catch (err: any) {
+          console.error("Bulk delete orders error:", err);
+          showToast(`Error during bulk deletion: ${err.message || String(err)}`);
+        }
         setConfirmModal(null);
       }
     });
@@ -5507,238 +5589,352 @@ export const AdminDashboard: React.FC = () => {
           {/* TAB 3: CUSTOMER ORDERS LISTING/WORKFLOW */}
           {activeTab === "orders" && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              <div>
-                <h3 className="font-display text-lg font-bold text-neutral-900 dark:text-white">Customer Transaction Desk</h3>
-                <p className="text-xs text-neutral-500 dark:text-neutral-400">Match UPI screens with internal logs to verify licenses.</p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="font-display text-lg font-bold text-neutral-900 dark:text-white">Customer Transaction Desk</h3>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">Match UPI screens with internal logs to verify licenses.</p>
+                </div>
               </div>
 
-              {orders.length === 0 ? (
-                <div className="text-center py-16 border border-dashed border-neutral-200 dark:border-brand-border bg-[#151515] rounded-2xl space-y-3">
-                  <FileText className="w-10 h-10 text-neutral-500 mx-auto" />
-                  <h4 className="text-sm font-semibold text-neutral-400">No Orders Registered</h4>
-                  <p className="text-xs text-neutral-500 max-w-sm mx-auto">Catalog purchases compiled by customers will display here instantly.</p>
+              {/* Order Status Counter Metrics cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                <div className="p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30">
+                  <span className="text-[10px] uppercase font-mono tracking-wider text-neutral-500 dark:text-neutral-400">Total Orders</span>
+                  <div className="text-2xl font-bold font-display mt-1 text-neutral-900 dark:text-white">{orders.length}</div>
                 </div>
-              ) : (
-                <div className="border border-neutral-200 dark:border-brand-border bg-white dark:bg-[#151515] rounded-2xl overflow-hidden shadow-xl">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs font-sans">
-                      <thead className="bg-[#1f1f1f]/50 dark:bg-[#191919]/60 border-b border-brand-border text-neutral-400 font-mono text-[10px] uppercase">
-                        <tr>
-                          <th className="px-6 py-4">Transaction / Buyer</th>
-                          <th className="px-6 py-4">Direct Contact</th>
-                          <th className="px-6 py-4">Enrolled Course</th>
-                          <th className="px-6 py-4">Image Check</th>
-                          <th className="px-6 py-4">Approval State</th>
-                          <th className="px-6 py-4">Deliverable Access</th>
-                          <th className="px-6 py-4 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-neutral-100 dark:divide-neutral-900">
-                        {orders.map((o) => {
-                          const matchingCour = courses.find(c => c.id === o.courseId);
-                          
-                          return (
-                            <tr key={o.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-900/45 transition-colors">
-                              
-                              {/* Buyer details */}
-                              <td className="px-6 py-4 space-y-1">
-                                <span className="font-semibold block text-neutral-900 dark:text-white text-sm">{o.name}</span>
-                                <span className="text-[10px] text-neutral-500 font-mono block select-all">{o.email}</span>
-                              </td>
-
-                              {/* Telegram Handle */}
-                              <td className="px-6 py-4 font-semibold font-mono">
-                                <a 
-                                  href={`https://t.me/${o.telegram}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-brand-gold hover:underline flex items-center space-x-1"
-                                >
-                                  <span>@{o.telegram}</span>
-                                  <ExternalLink className="w-3 h-3 opacity-60" />
-                                </a>
-                              </td>
-
-                              {/* Associated Course */}
-                              <td className="px-6 py-4 font-semibold">
-                                {matchingCour ? (
-                                  <div className="space-y-0.5">
-                                    <span className="text-neutral-900 dark:text-white truncate max-w-44 block leading-snug">{matchingCour.title}</span>
-                                    <span className="text-[9.5px] font-mono text-brand-gold">₹{matchingCour.price.toLocaleString("en-IN")}</span>
-                                  </div>
-                                ) : (
-                                  <div className="space-y-0.5">
-                                    <span className="text-neutral-900 dark:text-white truncate max-w-44 block leading-snug">{o.courseName || "Unknown Course"}</span>
-                                    <span className="text-[9.5px] font-mono text-brand-gold">₹{(o.price || 1499).toLocaleString("en-IN")}</span>
-                                  </div>
-                                )}
-                              </td>
-
-                              {/* Transaction Screen Preview trigger */}
-                              <td className="px-6 py-4">
-                                {(o.screenshotUrl || o.proofImage) ? (
-                                  <button
-                                    onClick={() => setViewScreenshotUrl(o.screenshotUrl || o.proofImage)}
-                                    className="text-indigo-400 hover:text-indigo-300 font-mono text-xs flex items-center space-x-1.5 focus:outline-none bg-indigo-500/10 hover:bg-indigo-500/15 py-1 px-2.5 rounded-md"
-                                  >
-                                    <Eye className="w-3.5 h-3.5" />
-                                    <span>Verify Proof</span>
-                                  </button>
-                                ) : (
-                                  <span className="text-neutral-500 italic block">None Submitted</span>
-                                )}
-                              </td>
-
-                              {/* Verification status pill */}
-                              <td className="px-6 py-4">
-                                <select
-                                  value={o.status}
-                                  onChange={(e) => {
-                                    const nextStatus = e.target.value;
-                                    confirmAndUpdateStatus(o.id || "", nextStatus, o.name);
-                                  }}
-                                  className={`font-mono text-xs font-bold px-3 py-1.5 rounded-xl border outline-none bg-white dark:bg-[#151515] hover:opacity-90 cursor-pointer transition-all ${
-                                    o.status?.toLowerCase() === "pending" ? "text-yellow-500 border-yellow-500/30 bg-yellow-500/5 dark:bg-yellow-500/15 focus:border-yellow-500" :
-                                    o.status?.toLowerCase() === "approved" || o.status?.toLowerCase() === "verified" ? "text-blue-500 border-blue-500/30 bg-blue-500/5 dark:bg-blue-500/15 focus:border-blue-500" :
-                                    o.status?.toLowerCase() === "delivered" ? "text-green-500 border-green-500/30 bg-green-500/5 dark:bg-green-500/15 focus:border-green-500" :
-                                    o.status?.toLowerCase() === "refunded" ? "text-red-500 border-red-500/30 bg-red-500/5 dark:bg-red-500/15 focus:border-red-500" :
-                                    "text-neutral-500 border-neutral-500/30 bg-neutral-500/5 dark:bg-neutral-500/15 focus:border-neutral-500"
-                                  }`}
-                                >
-                                  <option value="pending" className="text-yellow-500 bg-white dark:bg-[#151515]">Pending</option>
-                                  <option value="approved" className="text-blue-500 bg-white dark:bg-[#151515]">Approved</option>
-                                  <option value="delivered" className="text-green-500 bg-white dark:bg-[#151515]">Delivered</option>
-                                  <option value="refunded" className="text-red-500 bg-white dark:bg-[#151515]">Refunded</option>
-                                  <option value="cancelled" className="text-neutral-500 bg-white dark:bg-[#151515]">Cancelled</option>
-                                </select>
-                              </td>
-
-                              {/* Deliverable Access Details */}
-                              <td className="px-6 py-4 font-mono text-[10.5px] leading-relaxed select-none">
-                                <div className="space-y-1.5 bg-neutral-100/50 dark:bg-neutral-900/50 border border-neutral-105 dark:border-neutral-900/80 p-3 rounded-xl max-w-xs">
-                                  <div>
-                                    <span className="text-neutral-400 block font-mono text-[9px] uppercase tracking-wider">Course Name</span>
-                                    <span className="text-neutral-900 dark:text-neutral-150 font-bold block truncate max-w-[155px]" title={matchingCour?.title || o.courseName}>
-                                      {matchingCour?.title || o.courseName}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    <span className="text-neutral-400 block font-mono text-[9px] uppercase tracking-wider">Buyer Name</span>
-                                    <span className="text-neutral-900 dark:text-neutral-200 font-semibold block truncate max-w-[155px]" title={o.name}>
-                                      {o.name}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-neutral-400">Payment Status:</span>
-                                    <span className={`font-bold ${
-                                      o.status?.toLowerCase() === "pending" ? "text-red-500" :
-                                      o.status?.toLowerCase() === "approved" || o.status?.toLowerCase() === "verified" ? "text-blue-500" : "text-green-500"
-                                    }`}>{o.status}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-neutral-400">Delivery Status:</span>
-                                    <span className={`font-bold ${o.status?.toLowerCase() === "delivered" ? "text-green-500" : "text-amber-500"}`}>
-                                      {o.status?.toLowerCase() === "delivered" ? "Active/Delivered" : "Awaiting Audit"}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-neutral-400">Link Available:</span>
-                                    <span className={`font-bold ${matchingCour?.deliverableLink ? "text-green-500" : "text-red-500"}`}>
-                                      {matchingCour?.deliverableLink ? "Yes" : "No"}
-                                    </span>
-                                  </div>
-                                  
-                                  {/* Metrics tracking telemetry */}
-                                  <div className="pt-2 mt-2 border-t border-dashed border-neutral-200 dark:border-neutral-800 text-[9px] text-neutral-400 space-y-1">
-                                    <div className="flex items-center justify-between text-brand-gold font-bold">
-                                      <span>Clicks Tracker:</span>
-                                      <span>{o.accessCount || 0} times</span>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                      <span>Last Clicked:</span>
-                                      <span className="font-semibold text-neutral-300">
-                                        {o.lastAccessTime ? (
-                                          o.lastAccessTime.seconds 
-                                            ? new Date(o.lastAccessTime.seconds * 1000).toLocaleString("en-GB") 
-                                            : new Date(o.lastAccessTime).toLocaleString("en-GB")
-                                        ) : "Never"}
-                                      </span>
-                                    </div>
-                                    {o.purchasedAt && (
-                                      <div className="flex items-center justify-between">
-                                        <span>Verified At:</span>
-                                        <span className="text-neutral-350">
-                                          {o.purchasedAt.seconds 
-                                            ? new Date(o.purchasedAt.seconds * 1000).toLocaleDateString() 
-                                            : new Date(o.purchasedAt).toLocaleDateString()}
-                                        </span>
-                                      </div>
-                                    )}
-                                    {o.deliveredAt && (
-                                      <div className="flex items-center justify-between">
-                                        <span>Delivered At:</span>
-                                        <span className="text-neutral-350">
-                                          {o.deliveredAt.seconds 
-                                            ? new Date(o.deliveredAt.seconds * 1000).toLocaleDateString() 
-                                            : new Date(o.deliveredAt).toLocaleDateString()}
-                                        </span>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </td>
-
-                              {/* Approval trigger buttons */}
-                              <td className="px-6 py-4 text-right">
-                                <div className="flex items-center justify-end gap-1.5 font-mono text-[10.5px]">
-                                  
-                                  <button
-                                    onClick={() => confirmAndUpdateStatus(o.id || "", "approved", o.name)}
-                                    disabled={o.status?.toLowerCase() === "approved" || o.status?.toLowerCase() === "verified"}
-                                    className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-1 transition-all ${
-                                      (o.status?.toLowerCase() === "approved" || o.status?.toLowerCase() === "verified")
-                                        ? "opacity-35 cursor-not-allowed border-neutral-200 dark:border-neutral-900 text-neutral-400"
-                                        : "border-blue-500/30 text-blue-500 bg-blue-500/5 dark:bg-blue-500/15 hover:bg-blue-500/25 active:scale-95"
-                                    }`}
-                                    title="Mark order as Approved"
-                                  >
-                                    <Check className="w-3 h-3 shrink-0" />
-                                    <span>Approve Order</span>
-                                  </button>
-
-                                  <button
-                                    onClick={() => confirmAndUpdateStatus(o.id || "", "delivered", o.name)}
-                                    disabled={o.status?.toLowerCase() === "delivered"}
-                                    className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-1 transition-all ${
-                                      o.status?.toLowerCase() === "delivered"
-                                        ? "opacity-35 cursor-not-allowed border-neutral-200 dark:border-neutral-900 text-neutral-400"
-                                        : "border-green-500/30 text-green-500 bg-green-500/5 dark:bg-green-500/15 hover:bg-green-500/25 active:scale-95"
-                                    }`}
-                                    title="Mark order as Delivered"
-                                  >
-                                    <CheckCircle className="w-3 h-3 shrink-0" />
-                                    <span>Mark Delivered</span>
-                                  </button>
-
-                                  <button
-                                    onClick={() => handleDeleteOrder(o.id || "")}
-                                    className="p-2 border border-red-500/30 text-red-500 bg-red-500/5 dark:bg-red-500/15 hover:bg-red-500/25 rounded-xl transition-all active:scale-95"
-                                    title="Delete Order"
-                                  >
-                                    <Trash className="w-3.5 h-3.5 shrink-0" />
-                                  </button>
-
-                                </div>
-                              </td>
-
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                <div className="p-4 rounded-xl border border-yellow-500/15 bg-yellow-500/5">
+                  <span className="text-[10px] uppercase font-mono tracking-wider text-yellow-600 dark:text-yellow-500">Pending</span>
+                  <div className="text-2xl font-bold font-display mt-1 text-yellow-600 dark:text-yellow-400">
+                    {orders.filter(o => o.status?.toLowerCase() === "pending").length}
                   </div>
                 </div>
-              )}
+                <div className="p-4 rounded-xl border border-blue-500/15 bg-blue-500/5">
+                  <span className="text-[10px] uppercase font-mono tracking-wider text-blue-600 dark:text-blue-500">Approved</span>
+                  <div className="text-2xl font-bold font-display mt-1 text-blue-600 dark:text-blue-400">
+                    {orders.filter(o => o.status?.toLowerCase() === "approved" || o.status?.toLowerCase() === "verified").length}
+                  </div>
+                </div>
+                <div className="p-4 rounded-xl border border-green-500/15 bg-green-500/5">
+                  <span className="text-[10px] uppercase font-mono tracking-wider text-green-600 dark:text-green-500">Delivered</span>
+                  <div className="text-2xl font-bold font-display mt-1 text-green-600 dark:text-green-400">
+                    {orders.filter(o => o.status?.toLowerCase() === "delivered").length}
+                  </div>
+                </div>
+                <div className="p-4 rounded-xl border border-red-500/15 bg-red-500/5 col-span-2 lg:col-span-1">
+                  <span className="text-[10px] uppercase font-mono tracking-wider text-red-600 dark:text-red-500">Other States</span>
+                  <div className="text-2xl font-bold font-display mt-1 text-red-600 dark:text-red-400">
+                    {orders.filter(o => {
+                      const st = o.status?.toLowerCase();
+                      return st === "refunded" || st === "cancelled";
+                    }).length}
+                  </div>
+                </div>
+              </div>
+
+              {/* Order Controls Bar */}
+              <div className="flex flex-col lg:flex-row gap-4 justify-between items-stretch lg:items-center bg-neutral-50 dark:bg-neutral-900/10 p-4 rounded-xl border border-neutral-200 dark:border-neutral-800">
+                {/* Horizontal Status Filter Pills */}
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { value: "all", label: "All", count: orders.length },
+                    { value: "pending", label: "Pending", count: orders.filter(o => o.status?.toLowerCase() === "pending").length },
+                    { value: "approved", label: "Approved", count: orders.filter(o => o.status?.toLowerCase() === "approved" || o.status?.toLowerCase() === "verified").length },
+                    { value: "delivered", label: "Delivered", count: orders.filter(o => o.status?.toLowerCase() === "delivered").length },
+                    { value: "refunded", label: "Refunded", count: orders.filter(o => o.status?.toLowerCase() === "refunded").length },
+                    { value: "cancelled", label: "Cancelled", count: orders.filter(o => o.status?.toLowerCase() === "cancelled").length }
+                  ].map((filterOption) => (
+                    <button
+                      key={filterOption.value}
+                      onClick={() => setOrderStatusFilter(filterOption.value)}
+                      className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all flex items-center space-x-1.5 border ${
+                        orderStatusFilter === filterOption.value
+                          ? "bg-brand-gold text-black border-brand-gold font-semibold shadow-sm"
+                          : "bg-white dark:bg-[#151515] text-neutral-600 dark:text-neutral-400 border-neutral-200 dark:border-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-850"
+                      }`}
+                    >
+                      <span>{filterOption.label}</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                        orderStatusFilter === filterOption.value 
+                          ? "bg-black/10 text-black font-bold" 
+                          : "bg-neutral-100 dark:bg-neutral-900 text-neutral-500"
+                      }`}>{filterOption.count}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Bulk Actions and Export Buttons Group */}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={handleAcceptAllPending}
+                    className="flex-1 sm:flex-initial text-xs px-3 py-2 rounded-lg font-medium border border-green-500/30 text-green-600 dark:text-green-500 bg-green-500/5 hover:bg-green-500/10 transition-all flex items-center justify-center space-x-1.5 active:scale-95"
+                    title="Approve and enroll all currently pending orders"
+                  >
+                    <CheckSquare className="w-3.5 h-3.5" />
+                    <span>Accept All Pending</span>
+                  </button>
+
+                  <button
+                    onClick={handleDeleteAllOrders}
+                    className="flex-1 sm:flex-initial text-xs px-3 py-2 rounded-lg font-medium border border-red-500/30 text-red-600 dark:text-red-500 bg-red-500/5 hover:bg-red-500/10 transition-all flex items-center justify-center space-x-1.5 active:scale-95"
+                    title="Permanently wipe all orders from database"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete All</span>
+                  </button>
+
+                  <button
+                    onClick={handleExportOrdersCSV}
+                    className="flex-1 sm:flex-initial text-xs px-3 py-2 rounded-lg font-bold bg-brand-gold hover:bg-brand-gold/90 text-black shadow-md hover:shadow-brand-gold/10 transition-all flex items-center justify-center space-x-1.5 active:scale-95"
+                    title="Export complete orders history as Excel-compatible CSV file"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Export History</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Orders table with filter applied */}
+              {(() => {
+                const filteredOrders = orders.filter((o) => {
+                  if (orderStatusFilter === "all") return true;
+                  if (orderStatusFilter === "approved") {
+                    return o.status?.toLowerCase() === "approved" || o.status?.toLowerCase() === "verified";
+                  }
+                  return o.status?.toLowerCase() === orderStatusFilter;
+                });
+
+                if (filteredOrders.length === 0) {
+                  return (
+                    <div className="text-center py-16 border border-dashed border-neutral-200 dark:border-brand-border bg-white dark:bg-[#151515] rounded-2xl space-y-3 shadow-sm">
+                      <FileText className="w-10 h-10 text-neutral-500 mx-auto" />
+                      <h4 className="text-sm font-semibold text-neutral-400">No Orders Match Filter</h4>
+                      <p className="text-xs text-neutral-500 max-w-sm mx-auto">There are currently no orders under the status "{orderStatusFilter}".</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="border border-neutral-200 dark:border-brand-border bg-white dark:bg-[#151515] rounded-2xl overflow-hidden shadow-xl">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs font-sans">
+                        <thead className="bg-[#1f1f1f]/50 dark:bg-[#191919]/60 border-b border-brand-border text-neutral-400 font-mono text-[10px] uppercase">
+                          <tr>
+                            <th className="px-6 py-4">Transaction / Buyer</th>
+                            <th className="px-6 py-4">Direct Contact</th>
+                            <th className="px-6 py-4">Enrolled Course</th>
+                            <th className="px-6 py-4">Image Check</th>
+                            <th className="px-6 py-4">Approval State</th>
+                            <th className="px-6 py-4">Deliverable Access</th>
+                            <th className="px-6 py-4 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-neutral-100 dark:divide-neutral-900">
+                          {filteredOrders.map((o) => {
+                            const matchingCour = courses.find(c => c.id === o.courseId);
+                            
+                            return (
+                              <tr key={o.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-900/45 transition-colors">
+                                
+                                {/* Buyer details */}
+                                <td className="px-6 py-4 space-y-1">
+                                  <span className="font-semibold block text-neutral-900 dark:text-white text-sm">{o.name}</span>
+                                  <span className="text-[10px] text-neutral-500 font-mono block select-all">{o.email}</span>
+                                </td>
+
+                                {/* Telegram Handle */}
+                                <td className="px-6 py-4 font-semibold font-mono">
+                                  <a 
+                                    href={`https://t.me/${o.telegram}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-brand-gold hover:underline flex items-center space-x-1"
+                                  >
+                                    <span>@{o.telegram}</span>
+                                    <ExternalLink className="w-3 h-3 opacity-60" />
+                                  </a>
+                                </td>
+
+                                {/* Associated Course */}
+                                <td className="px-6 py-4 font-semibold">
+                                  {matchingCour ? (
+                                    <div className="space-y-0.5">
+                                      <span className="text-neutral-900 dark:text-white truncate max-w-44 block leading-snug">{matchingCour.title}</span>
+                                      <span className="text-[9.5px] font-mono text-brand-gold">₹{matchingCour.price.toLocaleString("en-IN")}</span>
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-0.5">
+                                      <span className="text-neutral-900 dark:text-white truncate max-w-44 block leading-snug">{o.courseName || "Unknown Course"}</span>
+                                      <span className="text-[9.5px] font-mono text-brand-gold">₹{(o.price || 1499).toLocaleString("en-IN")}</span>
+                                    </div>
+                                  )}
+                                </td>
+
+                                {/* Transaction Screen Preview trigger */}
+                                <td className="px-6 py-4">
+                                  {(o.screenshotUrl || o.proofImage) ? (
+                                    <button
+                                      onClick={() => setViewScreenshotUrl(o.screenshotUrl || o.proofImage)}
+                                      className="text-indigo-400 hover:text-indigo-300 font-mono text-xs flex items-center space-x-1.5 focus:outline-none bg-indigo-500/10 hover:bg-indigo-500/15 py-1 px-2.5 rounded-md"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
+                                      <span>Verify Proof</span>
+                                    </button>
+                                  ) : (
+                                    <span className="text-neutral-500 italic block">None Submitted</span>
+                                  )}
+                                </td>
+
+                                {/* Verification status pill */}
+                                <td className="px-6 py-4">
+                                  <select
+                                    value={o.status}
+                                    onChange={(e) => {
+                                      const nextStatus = e.target.value;
+                                      confirmAndUpdateStatus(o.id || "", nextStatus, o.name);
+                                    }}
+                                    className={`font-mono text-xs font-bold px-3 py-1.5 rounded-xl border outline-none bg-white dark:bg-[#151515] hover:opacity-90 cursor-pointer transition-all ${
+                                      o.status?.toLowerCase() === "pending" ? "text-yellow-500 border-yellow-500/30 bg-yellow-500/5 dark:bg-yellow-500/15 focus:border-yellow-500" :
+                                      o.status?.toLowerCase() === "approved" || o.status?.toLowerCase() === "verified" ? "text-blue-500 border-blue-500/30 bg-blue-500/5 dark:bg-blue-500/15 focus:border-blue-500" :
+                                      o.status?.toLowerCase() === "delivered" ? "text-green-500 border-green-500/30 bg-green-500/5 dark:bg-green-500/15 focus:border-green-500" :
+                                      o.status?.toLowerCase() === "refunded" ? "text-red-500 border-red-500/30 bg-red-500/5 dark:bg-red-500/15 focus:border-red-500" :
+                                      "text-neutral-500 border-neutral-500/30 bg-neutral-500/5 dark:bg-neutral-500/15 focus:border-neutral-500"
+                                    }`}
+                                  >
+                                    <option value="pending" className="text-yellow-500 bg-white dark:bg-[#151515]">Pending</option>
+                                    <option value="approved" className="text-blue-500 bg-white dark:bg-[#151515]">Approved</option>
+                                    <option value="delivered" className="text-green-500 bg-white dark:bg-[#151515]">Delivered</option>
+                                    <option value="refunded" className="text-red-500 bg-white dark:bg-[#151515]">Refunded</option>
+                                    <option value="cancelled" className="text-neutral-500 bg-white dark:bg-[#151515]">Cancelled</option>
+                                  </select>
+                                </td>
+
+                                {/* Deliverable Access Details */}
+                                <td className="px-6 py-4 font-mono text-[10.5px] leading-relaxed select-none">
+                                  <div className="space-y-1.5 bg-neutral-100/50 dark:bg-neutral-900/50 border border-neutral-105 dark:border-neutral-900/80 p-3 rounded-xl max-w-xs">
+                                    <div>
+                                      <span className="text-neutral-400 block font-mono text-[9px] uppercase tracking-wider">Course Name</span>
+                                      <span className="text-neutral-900 dark:text-neutral-150 font-bold block truncate max-w-[155px]" title={matchingCour?.title || o.courseName}>
+                                        {matchingCour?.title || o.courseName}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-neutral-400 block font-mono text-[9px] uppercase tracking-wider">Buyer Name</span>
+                                      <span className="text-neutral-900 dark:text-neutral-200 font-semibold block truncate max-w-[155px]" title={o.name}>
+                                        {o.name}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-neutral-400">Payment Status:</span>
+                                      <span className={`font-bold ${
+                                        o.status?.toLowerCase() === "pending" ? "text-red-500" :
+                                        o.status?.toLowerCase() === "approved" || o.status?.toLowerCase() === "verified" ? "text-blue-500" : "text-green-500"
+                                      }`}>{o.status}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-neutral-400">Delivery Status:</span>
+                                      <span className={`font-bold ${o.status?.toLowerCase() === "delivered" ? "text-green-500" : "text-amber-500"}`}>
+                                        {o.status?.toLowerCase() === "delivered" ? "Active/Delivered" : "Awaiting Audit"}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-neutral-400">Link Available:</span>
+                                      <span className={`font-bold ${matchingCour?.deliverableLink ? "text-green-500" : "text-red-500"}`}>
+                                        {matchingCour?.deliverableLink ? "Yes" : "No"}
+                                      </span>
+                                    </div>
+                                    
+                                    {/* Metrics tracking telemetry */}
+                                    <div className="pt-2 mt-2 border-t border-dashed border-neutral-200 dark:border-neutral-800 text-[9px] text-neutral-400 space-y-1">
+                                      <div className="flex items-center justify-between text-brand-gold font-bold">
+                                        <span>Clicks Tracker:</span>
+                                        <span>{o.accessCount || 0} times</span>
+                                      </div>
+                                      <div className="flex items-center justify-between">
+                                        <span>Last Clicked:</span>
+                                        <span className="font-semibold text-neutral-300">
+                                          {o.lastAccessTime ? (
+                                            o.lastAccessTime.seconds 
+                                              ? new Date(o.lastAccessTime.seconds * 1000).toLocaleString("en-GB") 
+                                              : new Date(o.lastAccessTime).toLocaleString("en-GB")
+                                          ) : "Never"}
+                                        </span>
+                                      </div>
+                                      {o.purchasedAt && (
+                                        <div className="flex items-center justify-between">
+                                          <span>Verified At:</span>
+                                          <span className="text-neutral-350">
+                                            {o.purchasedAt.seconds 
+                                              ? new Date(o.purchasedAt.seconds * 1000).toLocaleDateString() 
+                                              : new Date(o.purchasedAt).toLocaleDateString()}
+                                          </span>
+                                        </div>
+                                      )}
+                                      {o.deliveredAt && (
+                                        <div className="flex items-center justify-between">
+                                          <span>Delivered At:</span>
+                                          <span className="text-neutral-350">
+                                            {o.deliveredAt.seconds 
+                                              ? new Date(o.deliveredAt.seconds * 1000).toLocaleDateString() 
+                                              : new Date(o.deliveredAt).toLocaleDateString()}
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+
+                                {/* Approval trigger buttons */}
+                                <td className="px-6 py-4 text-right">
+                                  <div className="flex items-center justify-end gap-1.5 font-mono text-[10.5px]">
+                                    
+                                    <button
+                                      onClick={() => confirmAndUpdateStatus(o.id || "", "approved", o.name)}
+                                      disabled={o.status?.toLowerCase() === "approved" || o.status?.toLowerCase() === "verified"}
+                                      className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-1 transition-all ${
+                                        (o.status?.toLowerCase() === "approved" || o.status?.toLowerCase() === "verified")
+                                          ? "opacity-35 cursor-not-allowed border-neutral-200 dark:border-neutral-900 text-neutral-400"
+                                          : "border-blue-500/30 text-blue-500 bg-blue-500/5 dark:bg-blue-500/15 hover:bg-blue-500/25 active:scale-95"
+                                      }`}
+                                      title="Mark order as Approved"
+                                    >
+                                      <Check className="w-3 h-3 shrink-0" />
+                                      <span>Approve Order</span>
+                                    </button>
+
+                                    <button
+                                      onClick={() => confirmAndUpdateStatus(o.id || "", "delivered", o.name)}
+                                      disabled={o.status?.toLowerCase() === "delivered"}
+                                      className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-1 transition-all ${
+                                        o.status?.toLowerCase() === "delivered"
+                                          ? "opacity-35 cursor-not-allowed border-neutral-200 dark:border-neutral-900 text-neutral-400"
+                                          : "border-green-500/30 text-green-500 bg-green-500/5 dark:bg-green-500/15 hover:bg-green-500/25 active:scale-95"
+                                      }`}
+                                      title="Mark order as Delivered"
+                                    >
+                                      <CheckCircle className="w-3 h-3 shrink-0" />
+                                      <span>Mark Delivered</span>
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleDeleteOrder(o.id || "")}
+                                      className="p-2 border border-red-500/30 text-red-500 bg-red-500/5 dark:bg-red-500/15 hover:bg-red-500/25 rounded-xl transition-all active:scale-95"
+                                      title="Delete Order"
+                                    >
+                                      <Trash className="w-3.5 h-3.5 shrink-0" />
+                                    </button>
+
+                                  </div>
+                                </td>
+
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
 
             </div>
           )}
@@ -7341,114 +7537,130 @@ export const AdminDashboard: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-neutral-200 dark:divide-brand-border font-sans text-xs">
-                          {filteredUsers.map((st) => (
-                            <tr key={st.id} className="hover:bg-neutral-50/55 dark:hover:bg-brand-card/10 transition-all">
-                              {/* Info details */}
-                              <td className="py-4 px-6 flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-brand-gold/10 border border-brand-gold/25 overflow-hidden flex items-center justify-center shrink-0">
-                                  {st.photoUrl || st.photoURL ? (
-                                    <img src={st.photoUrl || st.photoURL} alt="" className="w-full h-full object-cover" />
-                                  ) : (
-                                    <span className="text-xs font-mono font-bold text-brand-gold">
-                                      {(st.fullName || st.email || "S").charAt(0).toUpperCase()}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="space-y-0.5 min-w-0 text-left">
-                                  <p className="font-bold text-neutral-900 dark:text-white truncate max-w-xs">{st.fullName || "Un-onboarded Draft"}</p>
-                                  <p className="text-[10px] text-neutral-400 font-mono select-all truncate max-w-xs">{st.email}</p>
-                                </div>
-                              </td>
-
-                              {/* Instantly loaded social indicators */}
-                              <td className="py-4 px-6 text-left">
-                                {st.youtubeUrl || st.instagramUrl || st.facebookUrl || st.linkedinUrl || st.twitterUrl || st.telegramUsername || st.websiteUrl ? (
-                                  <div className="flex flex-wrap gap-1.5 max-w-xs">
-                                    {st.youtubeUrl && <span className="inline-block text-[9px] font-mono bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded" title={st.youtubeUrl}>YT</span>}
-                                    {st.instagramUrl && <span className="inline-block text-[9px] font-mono bg-pink-500/10 text-pink-400 px-1.5 py-0.5 rounded" title={st.instagramUrl}>IG</span>}
-                                    {st.facebookUrl && <span className="inline-block text-[9px] font-mono bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded" title={st.facebookUrl}>FB</span>}
-                                    {st.linkedinUrl && <span className="inline-block text-[9px] font-mono bg-[#0A66C2]/10 text-[#0A66C2] px-1.5 py-0.5 rounded" title={st.linkedinUrl}>LN</span>}
-                                    {st.twitterUrl && <span className="inline-block text-[9px] font-mono bg-neutral-500/15 text-neutral-450 px-1.5 py-0.5 rounded" title={st.twitterUrl}>X</span>}
-                                    {st.telegramUsername && <span className="inline-block text-[9px] font-mono bg-[#0088cc]/10 text-[#0088cc] px-1.5 py-0.5 rounded" title={`@${st.telegramUsername}`}>TG</span>}
-                                    {st.websiteUrl && <span className="inline-block text-[9px] font-mono bg-brand-gold/15 text-brand-gold px-1.5 py-0.5 rounded" title={st.websiteUrl}>WEB</span>}
+                          {filteredUsers.map((st) => {
+                            const stats = getUserEcommerceStats(st);
+                            return (
+                              <tr key={st.id} className="hover:bg-neutral-50/55 dark:hover:bg-brand-card/10 transition-all">
+                                {/* Info details */}
+                                <td className="py-4 px-6 flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-full bg-brand-gold/10 border border-brand-gold/25 overflow-hidden flex items-center justify-center shrink-0">
+                                    {st.photoUrl || st.photoURL ? (
+                                      <img src={st.photoUrl || st.photoURL} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                      <span className="text-xs font-mono font-bold text-brand-gold">
+                                        {(st.fullName || st.email || "S").charAt(0).toUpperCase()}
+                                      </span>
+                                    )}
                                   </div>
-                                ) : (
-                                  <span className="text-[10px] text-neutral-500 italic">None linked</span>
-                                )}
-                              </td>
-                              
-                              {/* contact and address location */}
-                              <td className="py-4 px-6 text-left">
-                                <p className="font-semibold text-neutral-700 dark:text-neutral-300">{st.mobile || <span className="text-neutral-550 italic text-[10px]">No mobile</span>}</p>
-                                <p className="text-[10px] text-neutral-400 truncate max-w-xs">
-                                  {[st.address, st.city, st.state, st.country].filter(Boolean).join(", ") || <span className="italic">No address</span>}
-                                </p>
-                              </td>
+                                  <div className="space-y-0.5 min-w-0 text-left">
+                                    <p className="font-bold text-neutral-900 dark:text-white truncate max-w-xs">{st.fullName || "Un-onboarded Draft"}</p>
+                                    <p className="text-[10px] text-neutral-400 font-mono select-all truncate max-w-xs">{st.email}</p>
+                                  </div>
+                                </td>
 
-                              {/* Status verification indicators */}
-                              <td className="py-4 px-6 text-center">
-                                <div className="flex flex-col gap-1 items-center">
-                                  <span className={`inline-block text-[9px] font-mono font-bold px-2.5 py-0.5 rounded-full border uppercase ${
-                                    st.disabled
-                                      ? "bg-red-500/10 text-red-500 border-red-500/20"
-                                      : "bg-green-500/10 text-green-500 border-green-500/20"
-                                  }`}>
-                                    {st.disabled ? "Disabled" : "Active"}
-                                  </span>
-                                  {st.emailVerified === true && (
-                                    <span className="text-[8px] text-brand-gold font-mono uppercase bg-brand-gold/10 px-1 rounded border border-brand-gold/25">VERIFIED</span>
+                                {/* Instantly loaded social indicators */}
+                                <td className="py-4 px-6 text-left">
+                                  {st.youtubeUrl || st.instagramUrl || st.facebookUrl || st.linkedinUrl || st.twitterUrl || st.telegramUsername || st.websiteUrl ? (
+                                    <div className="flex flex-wrap gap-1.5 max-w-xs">
+                                      {st.youtubeUrl && <span className="inline-block text-[9px] font-mono bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded" title={st.youtubeUrl}>YT</span>}
+                                      {st.instagramUrl && <span className="inline-block text-[9px] font-mono bg-pink-500/10 text-pink-400 px-1.5 py-0.5 rounded" title={st.instagramUrl}>IG</span>}
+                                      {st.facebookUrl && <span className="inline-block text-[9px] font-mono bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded" title={st.facebookUrl}>FB</span>}
+                                      {st.linkedinUrl && <span className="inline-block text-[9px] font-mono bg-[#0A66C2]/10 text-[#0A66C2] px-1.5 py-0.5 rounded" title={st.linkedinUrl}>LN</span>}
+                                      {st.twitterUrl && <span className="inline-block text-[9px] font-mono bg-neutral-500/15 text-neutral-450 px-1.5 py-0.5 rounded" title={st.twitterUrl}>X</span>}
+                                      {st.telegramUsername && <span className="inline-block text-[9px] font-mono bg-[#0088cc]/10 text-[#0088cc] px-1.5 py-0.5 rounded" title={`@${st.telegramUsername}`}>TG</span>}
+                                      {st.websiteUrl && <span className="inline-block text-[9px] font-mono bg-brand-gold/15 text-brand-gold px-1.5 py-0.5 rounded" title={st.websiteUrl}>WEB</span>}
+                                    </div>
+                                  ) : (
+                                    <span className="text-[10px] text-neutral-500 italic">None linked</span>
                                   )}
-                                </div>
-                              </td>
+                                </td>
+                                
+                                {/* contact and address location */}
+                                <td className="py-4 px-6 text-left">
+                                  <p className="font-semibold text-neutral-700 dark:text-neutral-300">{st.mobile || <span className="text-neutral-550 italic text-[10px]">No mobile</span>}</p>
+                                  <p className="text-[10px] text-neutral-400 truncate max-w-xs">
+                                    {[st.address, st.city, st.state, st.country].filter(Boolean).join(", ") || <span className="italic">No address</span>}
+                                  </p>
+                                </td>
 
-                              {/* Advanced Actions panel including View profiling button */}
-                              <td className="py-4 px-6 text-right">
-                                <div className="flex justify-end gap-1.5 text-xs">
-                                  {/* View profilings detailed single screen */}
-                                  <button
-                                    type="button"
-                                    onClick={() => setViewingCrmUser(st)}
-                                    className="p-1 px-2 border border-brand-gold/30 text-brand-gold hover:bg-brand-gold/10 rounded-lg transition-colors flex items-center gap-1 text-[11px]"
-                                    title="View entire Student profile metrics and active logs"
-                                  >
-                                    <Eye className="w-3.5 h-3.5" /> View CRM
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => handleStartEditUser(st)}
-                                    className="p-1 px-2 border border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors flex items-center gap-1 text-[11px]"
-                                    title="Edit Student Details"
-                                  >
-                                    <Edit className="w-3.5 h-3.5" /> Edit
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggleDisableUser(st)}
-                                    className={`p-1 px-1.5 border rounded-lg transition-colors flex items-center gap-1 text-[11px] ${
+                                {/* Status verification indicators */}
+                                <td className="py-4 px-6 text-center">
+                                  <div className="flex flex-col gap-1 items-center justify-center">
+                                    <button 
+                                      type="button"
+                                      onClick={() => setViewingCartUser(st)}
+                                      className={`cursor-pointer inline-flex items-center gap-1.5 text-[10px] font-mono font-bold px-2.5 py-1 rounded-full border transition-all active:scale-95 shadow-sm select-none focus:outline-none ${
+                                        stats.cartCount > 0 
+                                          ? "border-indigo-500/40 text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20" 
+                                          : "border-neutral-500/20 text-neutral-500 bg-neutral-500/5 hover:bg-neutral-500/10"
+                                      }`}
+                                      title="Click to view courses in user's cart"
+                                    >
+                                      <ShoppingCart className="w-3.5 h-3.5 shrink-0" />
+                                      <span>Cart: {stats.cartCount} items</span>
+                                    </button>
+                                    <span className={`inline-block text-[9px] font-mono font-bold px-2.5 py-0.5 rounded-full border uppercase ${
                                       st.disabled
-                                        ? "border-green-500/30 text-green-500 hover:bg-green-500/10"
-                                        : "border-amber-500/30 text-amber-500 hover:bg-amber-500/10"
-                                    }`}
-                                    title={st.disabled ? "Enable Account" : "Disable Account"}
-                                  >
-                                    {st.disabled ? <CheckCircle className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-                                    {st.disabled ? "Enable" : "Lock"}
-                                  </button>
+                                        ? "bg-red-500/10 text-red-500 border-red-500/20"
+                                        : "bg-green-500/10 text-green-500 border-green-500/20"
+                                    }`}>
+                                      {st.disabled ? "Disabled" : "Active"}
+                                    </span>
+                                    {st.emailVerified === true && (
+                                      <span className="text-[8px] text-brand-gold font-mono uppercase bg-brand-gold/10 px-1 rounded border border-brand-gold/25">VERIFIED</span>
+                                    )}
+                                  </div>
+                                </td>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteUserDoc(st)}
-                                    className="p-1 px-1.5 border border-red-500/20 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors flex items-center gap-0.5 text-[11px]"
-                                    title="Permanently Delete Student profile"
-                                  >
-                                    <Trash className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
+                                {/* Advanced Actions panel including View profiling button */}
+                                <td className="py-4 px-6 text-right">
+                                  <div className="flex justify-end gap-1.5 text-xs">
+                                    {/* View profilings detailed single screen */}
+                                    <button
+                                      type="button"
+                                      onClick={() => setViewingCrmUser(st)}
+                                      className="p-1 px-2 border border-brand-gold/30 text-brand-gold hover:bg-brand-gold/10 rounded-lg transition-colors flex items-center gap-1 text-[11px]"
+                                      title="View entire Student profile metrics and active logs"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" /> View CRM
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleStartEditUser(st)}
+                                      className="p-1 px-2 border border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors flex items-center gap-1 text-[11px]"
+                                      title="Edit Student Details"
+                                    >
+                                      <Edit className="w-3.5 h-3.5" /> Edit
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleDisableUser(st)}
+                                      className={`p-1 px-1.5 border rounded-lg transition-colors flex items-center gap-1 text-[11px] ${
+                                        st.disabled
+                                          ? "border-green-500/30 text-green-500 hover:bg-green-500/10"
+                                          : "border-amber-500/30 text-amber-500 hover:bg-amber-500/10"
+                                      }`}
+                                      title={st.disabled ? "Enable Account" : "Disable Account"}
+                                    >
+                                      {st.disabled ? <CheckCircle className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                                      {st.disabled ? "Enable" : "Lock"}
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteUserDoc(st)}
+                                      className="p-1 px-1.5 border border-red-500/20 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors flex items-center gap-0.5 text-[11px]"
+                                      title="Permanently Delete Student profile"
+                                    >
+                                      <Trash className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -9129,6 +9341,113 @@ export const AdminDashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* CUSTOMER CART INSPECTOR MODAL */}
+      {viewingCartUser && (() => {
+        const stats = getUserEcommerceStats(viewingCartUser);
+        const totalCartPrice = stats.userCartItems.reduce((acc, item) => acc + (Number(item.price || 0) * (item.quantity || 1)), 0);
+        
+        return (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200 text-xs">
+            <div className="relative w-full max-w-lg bg-white dark:bg-[#121212] rounded-3xl border border-neutral-200 dark:border-brand-border p-6 shadow-2xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[85vh] text-left">
+              
+              {/* Modal Header */}
+              <div className="flex items-center justify-between pb-4 border-b border-neutral-200 dark:border-neutral-900 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-brand-gold/15 border border-brand-gold/30 flex items-center justify-center overflow-hidden shrink-0">
+                    {viewingCartUser.photoUrl || viewingCartUser.photoURL ? (
+                      <img src={viewingCartUser.photoUrl || viewingCartUser.photoURL} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-sm font-mono font-bold text-brand-gold">
+                        {(viewingCartUser.fullName || viewingCartUser.email || "C").charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-mono font-bold bg-indigo-500/10 text-indigo-450 px-2 py-0.5 rounded-full uppercase border border-indigo-500/25">Live Cart Inspector</span>
+                    <h2 className="font-display text-base font-bold text-neutral-900 dark:text-white mt-0.5">
+                      {viewingCartUser.fullName || "Un-onboarded Student"}
+                    </h2>
+                    <p className="text-[10px] text-neutral-400 font-mono">{viewingCartUser.email}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setViewingCartUser(null)}
+                  className="text-neutral-450 hover:text-neutral-900 dark:hover:text-white p-1"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="py-4 overflow-y-auto space-y-4 flex-1">
+                {stats.userCartItems.length === 0 ? (
+                  <div className="text-center py-12 border border-dashed border-neutral-200 dark:border-brand-border bg-neutral-50/50 dark:bg-black/30 rounded-2xl space-y-3">
+                    <ShoppingCart className="w-8 h-8 text-neutral-400 mx-auto opacity-50" />
+                    <h4 className="text-sm font-semibold text-neutral-500 dark:text-neutral-400">Empty Cart</h4>
+                    <p className="text-xs text-neutral-400 max-w-xs mx-auto">This customer does not have any items in their shopping cart right now.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-mono uppercase tracking-wider font-bold text-neutral-400">Active Cart Items ({stats.userCartItems.length})</p>
+                    <div className="divide-y divide-neutral-100 dark:divide-neutral-900 border border-neutral-200 dark:border-brand-border rounded-2xl overflow-hidden bg-neutral-50/50 dark:bg-black/25">
+                      {stats.userCartItems.map((item: any, idx: number) => (
+                        <div key={item.id || idx} className="p-3 flex gap-3 items-center hover:bg-neutral-50 dark:hover:bg-neutral-900/30 transition-colors text-left">
+                          <div className="w-12 h-12 rounded-lg bg-neutral-100 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 overflow-hidden shrink-0 flex items-center justify-center">
+                            {item.productImage ? (
+                              <img src={item.productImage} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            ) : (
+                              <BookOpen className="w-5 h-5 text-neutral-400" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[9px] font-mono font-bold text-brand-gold bg-brand-gold/10 px-1.5 py-0.5 rounded uppercase">{item.productCategory || "Course"}</span>
+                            <h4 className="font-semibold text-neutral-900 dark:text-white truncate text-xs mt-1" title={item.productTitle}>
+                              {item.productTitle}
+                            </h4>
+                            <div className="flex items-center gap-2 mt-0.5 text-[10px] text-neutral-400 font-mono">
+                              <span>Qty: {item.quantity || 1}</span>
+                              <span>•</span>
+                              <span>Price: ₹{Number(item.price || 0).toLocaleString("en-IN")}</span>
+                            </div>
+                          </div>
+                          <div className="text-right font-mono font-semibold text-neutral-900 dark:text-white text-xs">
+                            ₹{(Number(item.price || 0) * (item.quantity || 1)).toLocaleString("en-IN")}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Cart Summary */}
+                    <div className="p-4 rounded-2xl border border-indigo-500/10 bg-indigo-500/5 flex justify-between items-center">
+                      <div>
+                        <span className="text-[9px] font-mono uppercase tracking-wider font-bold text-neutral-400 block">Total Est. Value</span>
+                        <span className="text-sm font-semibold text-neutral-900 dark:text-neutral-200">Includes {stats.cartCount} total unit(s)</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-base font-bold font-mono text-brand-gold">₹{totalCartPrice.toLocaleString("en-IN")}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="pt-4 border-t border-neutral-200 dark:border-neutral-900 shrink-0 flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setViewingCartUser(null)}
+                  className="bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-neutral-800 dark:text-neutral-200 font-semibold px-5 py-2 rounded-xl transition-all font-sans"
+                >
+                  Close Inspector
+                </button>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ADD/EDIT ORBIT ITEM MODAL */}
       {showOrbitModal && (

@@ -160,8 +160,8 @@ export default async function handler(req, res) {
       }
 
       // Enroll
-      const orderId = "ord_wh_" + Date.now().toString().slice(-7) + Math.random().toString(36).slice(2, 5);
-      const purchaseId = "pur_wh_" + Date.now().toString().slice(-7) + Math.random().toString(36).slice(2, 6);
+      const orderId = gatewayOrderId;
+      const purchaseId = "pur_" + orderId + "_" + courseId;
 
       await firestoreSet("userPurchases", purchaseId, {
         userId, productId: courseId, productTitle: title || "Premium Course",

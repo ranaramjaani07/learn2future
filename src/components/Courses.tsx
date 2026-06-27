@@ -718,7 +718,11 @@ ${course.title}
         image={selectedCourse ? selectedCourse.thumbnail : undefined}
         url={selectedCourse ? `${window.location.origin}/#courses?checkout=${selectedCourse.id}` : `${window.location.origin}/#courses`}
         canonicalUrl={selectedCourse ? `${window.location.origin}/#courses?checkout=${selectedCourse.id}` : `${window.location.origin}/#courses`}
-        type={selectedCourse ? "course" : "website"}
+        type={selectedCourse ? "course" : "collection"}
+        breadcrumbs={[
+          { name: "Home", item: "/" },
+          { name: "Courses", item: "/courses" }
+        ]}
       />
       
       {/* Dynamic Intro Frame */}

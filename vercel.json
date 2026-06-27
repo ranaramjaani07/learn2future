@@ -38,23 +38,35 @@
   ],
   "rewrites": [
     {
-      "source": "/api/pay/create-order",
-      "destination": "/api/pay/create-order"
-    },
-    {
-      "source": "/api/pay/verify-payment",
-      "destination": "/api/pay/verify-payment"
-    },
-    {
-      "source": "/api/pay/webhook",
-      "destination": "/api/pay/webhook"
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
     },
     {
       "source": "/sitemap.xml",
       "destination": "/api/sitemap"
     },
     {
-      "source": "/(.*)",
+      "source": "/sitemap-static.xml",
+      "destination": "/api/sitemap?type=static"
+    },
+    {
+      "source": "/sitemap-courses.xml",
+      "destination": "/api/sitemap?type=courses"
+    },
+    {
+      "source": "/sitemap-blogs.xml",
+      "destination": "/api/sitemap?type=blogs"
+    },
+    {
+      "source": "/sitemap-categories.xml",
+      "destination": "/api/sitemap?type=categories"
+    },
+    {
+      "source": "/sitemap-images.xml",
+      "destination": "/api/sitemap?type=images"
+    },
+    {
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ],
