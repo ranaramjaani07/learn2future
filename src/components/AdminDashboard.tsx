@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import * as XLSX from "xlsx";
 import { 
   ResponsiveContainer, 
   BarChart as RechartsBarChart, 
@@ -83,10 +82,10 @@ import {
 import { ref, uploadBytes as put, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage, handleFirestoreError, OperationType } from "../firebase";
 import { Course, Order, ContactMessage, TrackingSettings, Review, HomepageSettings, HeroOrbitItem } from "../types";
-import { RichTextEditor } from "./RichTextEditor";
-import { CourseLandingPage } from "./CourseLandingPage";
-import { SuccessStoriesAdmin } from "./SuccessStoriesAdmin";
-import { CrmAnalyticsDashboard } from "./CrmAnalyticsDashboard";
+const RichTextEditor = React.lazy(() => import("./RichTextEditor").then(m => ({ default: m.RichTextEditor })));
+const CourseLandingPage = React.lazy(() => import("./CourseLandingPage").then(m => ({ default: m.CourseLandingPage })));
+const SuccessStoriesAdmin = React.lazy(() => import("./SuccessStoriesAdmin").then(m => ({ default: m.SuccessStoriesAdmin })));
+const CrmAnalyticsDashboard = React.lazy(() => import("./CrmAnalyticsDashboard").then(m => ({ default: m.CrmAnalyticsDashboard })));
 import {
   extractMetaPixelId,
   extractGtmId,
@@ -4098,11 +4097,13 @@ export const AdminDashboard: React.FC = () => {
   };
 
   // Excel (.xlsx) Export utility
-  const handleExportCrmExcel = () => {
+  const handleExportCrmExcel = async () => {
     if (usersList.length === 0) {
       showToast("No student profile logs exist in database to export.");
       return;
     }
+
+    const XLSX = await import("xlsx");
 
     const data = usersList.map(u => {
       const parseStamp = (val: any) => {
@@ -7309,22 +7310,24 @@ export const AdminDashboard: React.FC = () => {
 
           {/* TAB 8: CLIENT USER DIRECTORY */}
           {activeTab === "users" && (
-            <CrmAnalyticsDashboard
-              usersList={usersList}
-              orders={orders}
-              activityLogsList={activityLogsList}
-              reviewsList={reviewsList}
-              courses={courses}
-              allCartItemsList={allCartItemsList}
-              blogsList={blogsList}
-              handleStartEditUser={handleStartEditUser}
-              handleToggleDisableUser={handleToggleDisableUser}
-              handleDeleteUserDoc={handleDeleteUserDoc}
-              setViewingCrmUser={setViewingCrmUser}
-              triggerCrmHistoricalBackfill={triggerCrmHistoricalBackfill}
-              backfillingProgress={backfillingProgress}
-              showToast={showToast}
-            />
+            <React.Suspense fallback={<div className="p-8 text-center text-xs text-neutral-400 font-mono">Loading dynamic CRM analytics sub-systems...</div>}>
+              <CrmAnalyticsDashboard
+                usersList={usersList}
+                orders={orders}
+                activityLogsList={activityLogsList}
+                reviewsList={reviewsList}
+                courses={courses}
+                allCartItemsList={allCartItemsList}
+                blogsList={blogsList}
+                handleStartEditUser={handleStartEditUser}
+                handleToggleDisableUser={handleToggleDisableUser}
+                handleDeleteUserDoc={handleDeleteUserDoc}
+                setViewingCrmUser={setViewingCrmUser}
+                triggerCrmHistoricalBackfill={triggerCrmHistoricalBackfill}
+                backfillingProgress={backfillingProgress}
+                showToast={showToast}
+              />
+            </React.Suspense>
           )}
 
           {false && activeTab === "users" && (() => {
@@ -7896,7 +7899,9 @@ export const AdminDashboard: React.FC = () => {
 
           {/* TAB 10: PORTFOLIOS EDITORIAL BOARD */}
           {activeTab === "student-portfolios" && (
-            <SuccessStoriesAdmin />
+            <React.Suspense fallback={<div className="p-8 text-center text-xs text-neutral-400 font-mono">Loading portfolio registry...</div>}>
+              <SuccessStoriesAdmin />
+            </React.Suspense>
           )}
 
           {/* TAB 11: HOMEPAGE SETTINGS & HERO ORBIT MANAGER */}
@@ -10008,11 +10013,13 @@ export const AdminDashboard: React.FC = () => {
                       <label className="block text-[10px] font-mono text-neutral-400 uppercase">Article Content (Rich WYSIWYG Format)</label>
                       <span className="text-[9px] text-neutral-500 font-mono">Real-time WordPress / Blogger styled editor</span>
                     </div>
-                    <RichTextEditor
-                      postId={editingBlog ? editingBlog.id : "new_draft"}
-                      value={blogContent}
-                      onChange={setBlogContent}
-                    />
+                    <React.Suspense fallback={<div className="p-4 text-center text-xs text-neutral-500 font-mono border border-dashed border-neutral-800 rounded-xl">Loading rich text editor engine...</div>}>
+                      <RichTextEditor
+                        postId={editingBlog ? editingBlog.id : "new_draft"}
+                        value={blogContent}
+                        onChange={setBlogContent}
+                      />
+                    </React.Suspense>
                   </div>
 
                 </div>
@@ -10903,7 +10910,9 @@ export const AdminDashboard: React.FC = () => {
                   
                   {/* Embedded Reactive CourseLandingPage for Live WYSIWYG feedback loops! */}
                   <div className="border border-neutral-200 dark:border-neutral-850 rounded-3xl bg-white dark:bg-[#070707] min-h-[60vh] max-h-[75vh] overflow-y-auto relative shadow-inner">
-                    <CourseLandingPage previewCourse={currentPreviewPayload} />
+                    <React.Suspense fallback={<div className="p-8 text-center text-xs text-neutral-400 font-mono">Loading real-time course landing page preview...</div>}>
+                      <CourseLandingPage previewCourse={currentPreviewPayload} />
+                    </React.Suspense>
                   </div>
                 </div>
 

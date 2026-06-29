@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { jsPDF } from "jspdf";
 import { useApp } from "../context/AppContext";
 import { 
   BookOpen, 
@@ -2864,7 +2863,8 @@ export const MyEnrollments: React.FC = () => {
             return new Date(timestamp).toLocaleString();
           };
 
-          const handleDownloadPDF = () => {
+          const handleDownloadPDF = async () => {
+            const { jsPDF } = await import("jspdf");
             const makePDF = (imgElement?: HTMLImageElement) => {
               try {
                 const doc = new jsPDF();

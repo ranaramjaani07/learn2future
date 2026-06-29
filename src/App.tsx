@@ -1,29 +1,41 @@
-import React from "react";
+import React, { Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AppProvider, useApp } from "./context/AppContext";
 import { Navbar } from "./components/Navbar";
 import { Footer } from "./components/Footer";
 import { Home } from "./components/Home";
 import { Courses } from "./components/Courses";
-import { About } from "./components/About";
-import { Contact } from "./components/Contact";
-import { AdminLogin } from "./components/AdminLogin";
-import { AdminDashboard } from "./components/AdminDashboard";
-import { MyEnrollments } from "./components/MyEnrollments";
-import { Blog } from "./components/Blog";
-import { BlogDetails } from "./components/BlogDetails";
-import { Terms } from "./components/Terms";
-import { Privacy } from "./components/Privacy";
-import { RefundPolicy } from "./components/RefundPolicy";
-import { AffiliateInfo } from "./components/AffiliateInfo";
-import { Onboarding } from "./components/Onboarding";
-import { CartPage } from "./components/CartPage";
-import { ThankYou } from "./components/ThankYou";
-import { CourseLandingPage } from "./components/CourseLandingPage";
-import { StudentPortfolio } from "./components/StudentPortfolio";
 import { SEOHead } from "./components/SEOHead";
 import { AnimatePresence, motion } from "motion/react";
 import { Sparkles, ArrowUpRight } from "lucide-react";
+
+// Lazy loaded components for optimized bundle splitting
+const About = React.lazy(() => import("./components/About").then(m => ({ default: m.About })));
+const Contact = React.lazy(() => import("./components/Contact").then(m => ({ default: m.Contact })));
+const AdminLogin = React.lazy(() => import("./components/AdminLogin").then(m => ({ default: m.AdminLogin })));
+const AdminDashboard = React.lazy(() => import("./components/AdminDashboard").then(m => ({ default: m.AdminDashboard })));
+const MyEnrollments = React.lazy(() => import("./components/MyEnrollments").then(m => ({ default: m.MyEnrollments })));
+const Blog = React.lazy(() => import("./components/Blog").then(m => ({ default: m.Blog })));
+const BlogDetails = React.lazy(() => import("./components/BlogDetails").then(m => ({ default: m.BlogDetails })));
+const Terms = React.lazy(() => import("./components/Terms").then(m => ({ default: m.Terms })));
+const Privacy = React.lazy(() => import("./components/Privacy").then(m => ({ default: m.Privacy })));
+const RefundPolicy = React.lazy(() => import("./components/RefundPolicy").then(m => ({ default: m.RefundPolicy })));
+const AffiliateInfo = React.lazy(() => import("./components/AffiliateInfo").then(m => ({ default: m.AffiliateInfo })));
+const Onboarding = React.lazy(() => import("./components/Onboarding").then(m => ({ default: m.Onboarding })));
+const CartPage = React.lazy(() => import("./components/CartPage").then(m => ({ default: m.CartPage })));
+const ThankYou = React.lazy(() => import("./components/ThankYou").then(m => ({ default: m.ThankYou })));
+const CourseLandingPage = React.lazy(() => import("./components/CourseLandingPage").then(m => ({ default: m.CourseLandingPage })));
+const StudentPortfolio = React.lazy(() => import("./components/StudentPortfolio").then(m => ({ default: m.StudentPortfolio })));
+
+const RouteLoadingFallback: React.FC = () => (
+  <div className="min-h-[60vh] flex flex-col items-center justify-center bg-[#070707] text-white space-y-4">
+    <div className="relative w-10 h-10">
+      <div className="absolute inset-0 border-2 border-neutral-900 rounded-full"></div>
+      <div className="absolute inset-0 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+    </div>
+    <p className="text-[10px] text-neutral-500 font-mono tracking-widest animate-pulse uppercase">Syncing ledger...</p>
+  </div>
+);
 
 const MainLayout: React.FC = () => {
   const { 
@@ -185,30 +197,32 @@ const MainLayout: React.FC = () => {
             transition={{ duration: 0.35, ease: "easeInOut" }}
             className="w-full"
           >
-            <Routes location={routerLocation}>
-              <Route path="/" element={<Home />} />
-              <Route path="/courses" element={<Courses />} />
-              <Route path="/course/:slug" element={<CourseLandingPage />} />
-              <Route path="/about" element={<About />} />
-              <Route path="/contact" element={<Contact />} />
-              <Route path="/blog" element={<Blog />} />
-              <Route path="/blogs" element={<Blog />} />
-              <Route path="/blog/:slug" element={<BlogDetails />} />
-              <Route path="/terms" element={<Terms />} />
-              <Route path="/privacy" element={<Privacy />} />
-              <Route path="/refund-policy" element={<RefundPolicy />} />
-              <Route path="/refund" element={<Navigate to="/refund-policy" replace />} />
-              <Route path="/affiliate" element={<AffiliateInfo />} />
-              <Route path="/cart" element={<CartPage />} />
-              <Route path="/thank-you" element={<ThankYou />} />
-              <Route path="/student-portfolio" element={<StudentPortfolio />} />
-              <Route path="/student/:username" element={<StudentPortfolio />} />
-              <Route path="/onboarding" element={<Onboarding />} />
-              <Route path="/my-enrollments" element={<MyEnrollments />} />
-              <Route path="/admin-login" element={<AdminLogin />} />
-              <Route path="/admin-dashboard" element={isAdmin ? <AdminDashboard /> : <Navigate to="/admin-login" replace />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <Routes location={routerLocation}>
+                <Route path="/" element={<Home />} />
+                <Route path="/courses" element={<Courses />} />
+                <Route path="/course/:slug" element={<CourseLandingPage />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/contact" element={<Contact />} />
+                <Route path="/blog" element={<Blog />} />
+                <Route path="/blogs" element={<Blog />} />
+                <Route path="/blog/:slug" element={<BlogDetails />} />
+                <Route path="/terms" element={<Terms />} />
+                <Route path="/privacy" element={<Privacy />} />
+                <Route path="/refund-policy" element={<RefundPolicy />} />
+                <Route path="/refund" element={<Navigate to="/refund-policy" replace />} />
+                <Route path="/affiliate" element={<AffiliateInfo />} />
+                <Route path="/cart" element={<CartPage />} />
+                <Route path="/thank-you" element={<ThankYou />} />
+                <Route path="/student-portfolio" element={<StudentPortfolio />} />
+                <Route path="/student/:username" element={<StudentPortfolio />} />
+                <Route path="/onboarding" element={<Onboarding />} />
+                <Route path="/my-enrollments" element={<MyEnrollments />} />
+                <Route path="/admin-login" element={<AdminLogin />} />
+                <Route path="/admin-dashboard" element={isAdmin ? <AdminDashboard /> : <Navigate to="/admin-login" replace />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
           </motion.div>
         </AnimatePresence>
       </main>

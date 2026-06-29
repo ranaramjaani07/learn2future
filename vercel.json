@@ -82,7 +82,7 @@
       "destination": "/api/sitemap?type=images"
     },
     {
-      "source": "/((?!api/|sitemap).*)",
+      "source": "/:path*",
       "destination": "/index.html"
     }
   ],

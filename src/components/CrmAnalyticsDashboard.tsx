@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect } from "react";
-import * as XLSX from "xlsx";
 import { db } from "../firebase";
 import { collection, getDocs } from "firebase/firestore";
 import {
@@ -230,9 +229,10 @@ export function CrmAnalyticsDashboard({
   };
 
   // Upgraded CRM Intelligence Core CSV & Excel Exporter Engine
-  const handleTriggerFullIntelligenceExport = (format: "csv" | "excel") => {
+  const handleTriggerFullIntelligenceExport = async (format: "csv" | "excel") => {
     try {
       showToast("Compiling full user intelligence records... Please wait.");
+      const XLSX = await import("xlsx");
 
       const formatTimestamp = (ts: any) => {
         if (!ts) return "";
