@@ -313,11 +313,17 @@ function logServerFirestoreError(tag: string, err: any) {
   const isQuota = errStr.toLowerCase().includes("quota") ||
                   errStr.toLowerCase().includes("resource_exhausted") ||
                   errStr.toLowerCase().includes("429");
+  const isPermissionDenied = errStr.includes("403") ||
+                             errStr.toLowerCase().includes("permission_denied") ||
+                             errStr.toLowerCase().includes("permission denied");
   if (isQuota) {
     isServerQuotaExceeded = true;
-    console.warn(`[REST-FIRESTORE-WARN] ${tag} (Quota/Limit Handled graceful):`, errStr);
+    console.warn(`[REST-FIRESTORE-WARN] ${tag} (Quota/Limit Handled gracefully)`);
+  } else if (isPermissionDenied) {
+    console.log(`[REST-FIRESTORE-INFO] ${tag} (Locked/Permission Denied Handled gracefully)`);
   } else {
-    console.error(`[REST-FIRESTORE-ERROR] ${tag}:`, err);
+    const cleanErrStr = errStr.replace(/"error":\s*{/g, '"errObj": {');
+    console.error(`[REST-FIRESTORE-ERROR] ${tag}:`, cleanErrStr);
   }
 }
 
@@ -409,7 +415,10 @@ const adminDb = {
                 data() { return fieldsObj; }
               };
             } catch (err: any) {
-              logServerFirestoreError(`Get failed on ${colName}/${docId}`, err);
+              // paymentGateway is locked under Firestore rules for secure non-admin access; suppress expected error logs to prevent fake alarms
+              if (!(colName === "settings" && docId === "paymentGateway")) {
+                logServerFirestoreError(`Get failed on ${colName}/${docId}`, err);
+              }
               throw err;
             }
           },
@@ -528,18 +537,27 @@ async function ensureDefaultSettings() {
       console.log("[SERVER-INIT] Created default settings/tracking document in Firestore.");
     }
 
-    const payRef = adminDb.collection("settings").doc("paymentGateway");
-    const paySnap = await payRef.get();
-    if (!paySnap.exists) {
-      await payRef.set({
-        razorpayKeyId: DEFAULT_RAZORPAY_KEY_ID,
-        razorpayKeySecret: DEFAULT_RAZORPAY_KEY_SECRET,
-        razorpayWebhookSecret: "",
-        isTestMode: true,
-        isLiveMode: false,
-        enablePaymentSandbox: true
-      });
-      console.log("[SERVER-INIT] Created default settings/paymentGateway document in Firestore.");
+    try {
+      const payRef = adminDb.collection("settings").doc("paymentGateway");
+      const paySnap = await payRef.get();
+      if (!paySnap.exists) {
+        await payRef.set({
+          razorpayKeyId: DEFAULT_RAZORPAY_KEY_ID,
+          razorpayKeySecret: DEFAULT_RAZORPAY_KEY_SECRET,
+          razorpayWebhookSecret: "",
+          isTestMode: true,
+          isLiveMode: false,
+          enablePaymentSandbox: true
+        });
+        console.log("[SERVER-INIT] Created default settings/paymentGateway document in Firestore.");
+      }
+    } catch (e: any) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("403") || msg.includes("PERMISSION_DENIED")) {
+        console.log("[SERVER-INIT] Note: settings/paymentGateway is locked under Firestore rules. Seeding skipped for this doc.");
+      } else {
+        console.warn("[SERVER-INIT] Skipping default settings/paymentGateway initialization:", msg);
+      }
     }
 
     const globalRef = adminDb.collection("settings").doc("globalSettings");
@@ -723,20 +741,34 @@ async function refreshAllSettings(): Promise<void> {
     const docSnap = await adminDb.collection("settings").doc("paymentGateway").get();
     if (docSnap.exists) {
       const data = docSnap.data();
-      const rawKeyId = data?.razorpayKeyId || "";
+      const rawKeyId = data?.razorpayKeyId || process.env.RAZORPAY_KEY_ID || "";
       const normalizedKeyId = normalizeRazorpayKeyId(rawKeyId);
       
       currentPaymentSettings = {
         razorpayKeyId: normalizedKeyId || DEFAULT_RAZORPAY_KEY_ID,
-        razorpayKeySecret: data?.razorpayKeySecret || DEFAULT_RAZORPAY_KEY_SECRET,
-        razorpayWebhookSecret: data?.razorpayWebhookSecret || "",
-        isTestMode: data?.isTestMode !== false,
-        isLiveMode: !!data?.isLiveMode,
-        enablePaymentSandbox: data?.enablePaymentSandbox !== false
+        razorpayKeySecret: data?.razorpayKeySecret || process.env.RAZORPAY_KEY_SECRET || DEFAULT_RAZORPAY_KEY_SECRET,
+        razorpayWebhookSecret: data?.razorpayWebhookSecret || process.env.RAZORPAY_WEBHOOK_SECRET || "",
+        isTestMode: data?.isTestMode !== undefined ? data.isTestMode !== false : (process.env.PAYMENT_ENV !== "PRODUCTION"),
+        isLiveMode: data?.isLiveMode !== undefined ? !!data.isLiveMode : (process.env.PAYMENT_ENV === "PRODUCTION"),
+        enablePaymentSandbox: data?.enablePaymentSandbox !== undefined ? data.enablePaymentSandbox !== false : (process.env.PAYMENT_ENV !== "PRODUCTION")
       };
     }
-  } catch (error) {
-    logServerFirestoreError("[SERVER-SYNC] Direct fetch for settings/paymentGateway failed", error);
+  } catch (error: any) {
+    const errStr = error instanceof Error ? error.message : String(error);
+    if (errStr.includes("403") || errStr.includes("PERMISSION_DENIED")) {
+      console.log("[SERVER-SYNC] Note: settings/paymentGateway is locked under Firestore rules. Falling back entirely to environment variables.");
+    } else {
+      logServerFirestoreError("[SERVER-SYNC] Direct fetch for settings/paymentGateway failed", error);
+    }
+    // Safe fallback to env vars/defaults
+    currentPaymentSettings = {
+      razorpayKeyId: process.env.RAZORPAY_KEY_ID || DEFAULT_RAZORPAY_KEY_ID,
+      razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET || DEFAULT_RAZORPAY_KEY_SECRET,
+      razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || "",
+      isTestMode: process.env.PAYMENT_ENV !== "PRODUCTION",
+      isLiveMode: process.env.PAYMENT_ENV === "PRODUCTION",
+      enablePaymentSandbox: process.env.PAYMENT_ENV !== "PRODUCTION"
+    };
   }
 
   try {
@@ -792,21 +824,36 @@ async function fetchLatestPaymentSettings(): Promise<PaymentGatewaySettings> {
     const docSnap = await adminDb.collection("settings").doc("paymentGateway").get();
     if (docSnap.exists) {
       const data = docSnap.data();
-      const rawKeyId = data?.razorpayKeyId || "";
+      const rawKeyId = data?.razorpayKeyId || process.env.RAZORPAY_KEY_ID || "";
       const normalizedKeyId = normalizeRazorpayKeyId(rawKeyId);
       
       currentPaymentSettings = {
         razorpayKeyId: normalizedKeyId || DEFAULT_RAZORPAY_KEY_ID,
-        razorpayKeySecret: data?.razorpayKeySecret || DEFAULT_RAZORPAY_KEY_SECRET,
-        razorpayWebhookSecret: data?.razorpayWebhookSecret || "",
-        isTestMode: data?.isTestMode !== false,
-        isLiveMode: !!data?.isLiveMode,
-        enablePaymentSandbox: data?.enablePaymentSandbox !== false
+        razorpayKeySecret: data?.razorpayKeySecret || process.env.RAZORPAY_KEY_SECRET || DEFAULT_RAZORPAY_KEY_SECRET,
+        razorpayWebhookSecret: data?.razorpayWebhookSecret || process.env.RAZORPAY_WEBHOOK_SECRET || "",
+        isTestMode: data?.isTestMode !== undefined ? data.isTestMode !== false : (process.env.PAYMENT_ENV !== "PRODUCTION"),
+        isLiveMode: data?.isLiveMode !== undefined ? !!data.isLiveMode : (process.env.PAYMENT_ENV === "PRODUCTION"),
+        enablePaymentSandbox: data?.enablePaymentSandbox !== undefined ? data.enablePaymentSandbox !== false : (process.env.PAYMENT_ENV !== "PRODUCTION")
       };
       lastPaymentFetchTime = now;
     }
-  } catch (error) {
-    logServerFirestoreError("[SERVER-SYNC] Direct fetch for settings/paymentGateway inside getter failed", error);
+  } catch (error: any) {
+    const errStr = error instanceof Error ? error.message : String(error);
+    if (errStr.includes("403") || errStr.includes("PERMISSION_DENIED")) {
+      console.log("[SERVER-SYNC] Note: settings/paymentGateway is locked under Firestore rules. Falling back entirely to environment variables.");
+    } else {
+      logServerFirestoreError("[SERVER-SYNC] Direct fetch for settings/paymentGateway inside getter failed", error);
+    }
+    // Safe fallback to env vars/defaults
+    currentPaymentSettings = {
+      razorpayKeyId: process.env.RAZORPAY_KEY_ID || DEFAULT_RAZORPAY_KEY_ID,
+      razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET || DEFAULT_RAZORPAY_KEY_SECRET,
+      razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || "",
+      isTestMode: process.env.PAYMENT_ENV !== "PRODUCTION",
+      isLiveMode: process.env.PAYMENT_ENV === "PRODUCTION",
+      enablePaymentSandbox: process.env.PAYMENT_ENV !== "PRODUCTION"
+    };
+    lastPaymentFetchTime = now; // Prevent spinning fetch calls immediately again
   }
   return currentPaymentSettings;
 }
@@ -1721,13 +1768,30 @@ llms: ${baseUrl}/llms.txt
   app.get("*", async (req, res, next) => {
     const url = req.originalUrl || req.url;
     
+    // Safely parse the pathname without being fooled by dots in query parameters
+    let pathname = "/";
+    try {
+      pathname = new URL(url, "http://localhost").pathname;
+    } catch (e) {
+      pathname = url.split("?")[0] || "/";
+    }
+
+    const isApiOrViteInternal = 
+      pathname.startsWith("/api/") || 
+      pathname.startsWith("/@") || 
+      pathname.startsWith("/src/") || 
+      pathname.startsWith("/node_modules/");
+
+    const hasFileExtension = pathname.includes(".") && pathname !== "/index.html";
+
     // Determine if it's an HTML request (SPA page loader, root, index.html, or no file extension)
     const isHtmlRequest =
       req.method === "GET" &&
+      !isApiOrViteInternal &&
       (req.headers.accept?.includes("text/html") ||
-       url === "/" ||
-       url === "/index.html" ||
-       (!url.includes(".") && !url.startsWith("/api/") && !url.startsWith("/@")));
+       pathname === "/" ||
+       pathname === "/index.html" ||
+       !hasFileExtension);
 
     if (!isHtmlRequest) {
       return next();
@@ -2641,6 +2705,37 @@ Do not include any raw markdown formatting like \`\`\`json or trailing whitespac
     } catch (err: any) {
       console.error("[WEBHOOK-EXCEPTION] Error handling incoming payment webhook payload:", err);
       return res.status(500).json({ error: err?.message || "Internal webhook handler processing failure." });
+    }
+  });
+
+  // 4. Catch-all fallback for SPA routes that were not handled by static files, APIs, or early HTML interception
+  app.get("*", async (req, res, next) => {
+    const url = req.originalUrl || req.url;
+    
+    // Skip API routes, Vite internal resources, and other non-GET methods
+    if (req.method !== "GET" || url.startsWith("/api/") || url.startsWith("/@") || url.startsWith("/src/") || url.startsWith("/node_modules/")) {
+      return next();
+    }
+
+    try {
+      let template: string;
+      if (process.env.NODE_ENV !== "production") {
+        const indexHtmlPath = path.resolve(process.cwd(), "index.html");
+        template = fs.readFileSync(indexHtmlPath, "utf-8");
+        template = await vite.transformIndexHtml(url, template);
+      } else {
+        const distIndexHtmlPath = path.resolve(process.cwd(), "dist", "index.html");
+        if (fs.existsSync(distIndexHtmlPath)) {
+          template = fs.readFileSync(distIndexHtmlPath, "utf-8");
+        } else {
+          return res.status(404).send("Build in progress. Please check again in a moment!");
+        }
+      }
+
+      // Serve index.html as the universal fallback for single page application routing
+      res.status(200).set({ "Content-Type": "text/html" }).end(template);
+    } catch (err) {
+      next(err);
     }
   });
 
