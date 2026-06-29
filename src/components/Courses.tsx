@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { 
   Search, 
@@ -28,6 +28,7 @@ import { Course, Order } from "../types";
 import { SEO } from "./SEO";
 
 export const Courses: React.FC = () => {
+  const navigate = useNavigate();
   const { 
     user, 
     loginWithGoogle, 
@@ -163,8 +164,8 @@ ${course.title}
       if (found) {
         setSelectedCourse(found);
         
-        // Change browser URL dynamically to /course/slug utilizing pushState to fulfill clean SEO standard
-        window.history.pushState(null, "", `/course/${found.slug || found.id}${urlReferrerId ? `?ref=${urlReferrerId}` : ""}`);
+        // Change browser URL dynamically using navigate
+        navigate(`/course/${found.slug || found.id}${urlReferrerId ? `?ref=${urlReferrerId}` : ""}`, { replace: true });
 
         // Track referral CTR clicks on landing/load
         if (urlReferrerId) {
@@ -178,7 +179,7 @@ ${course.title}
 
   const handleOpenPurchase = (course: Course) => {
     setSelectedCourse(course);
-    window.history.pushState(null, "", `/course/${course.slug || course.id}`);
+    navigate(`/course/${course.slug || course.id}`);
     if (logUserActivity) {
       logUserActivity("Checkout Initiated", course.title);
     }
@@ -707,7 +708,7 @@ ${course.title}
     setAppliedCoupon(null);
     setCouponSuccess(false);
     setCouponError(null);
-    window.history.pushState(null, "", "/#courses");
+    navigate("/courses", { replace: true });
   };
 
   return (

@@ -32,8 +32,14 @@ export const ThankYou: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Helper: Try to extract Order ID from URL Hash e.g. #thank-you/ORDER_ID
-  const getOrderIdFromHash = () => {
+  // Helper: Try to extract Order ID from URL Query Parameter (?order=ORDER_ID) or Hash e.g. #thank-you/ORDER_ID
+  const getOrderId = () => {
+    // 1. Check for query parameter (modern standard)
+    const searchParams = new URLSearchParams(window.location.search);
+    const queryOrder = searchParams.get("order");
+    if (queryOrder) return queryOrder;
+
+    // 2. Check for hash (backward compatibility)
     const hash = window.location.hash.replace("#", "");
     if (hash.startsWith("thank-you/")) {
       return hash.replace("thank-you/", "");
@@ -41,10 +47,13 @@ export const ThankYou: React.FC = () => {
     if (hash.startsWith("order-success/")) {
       return hash.replace("order-success/", "");
     }
+    if (hash && !hash.includes("/")) {
+      return hash;
+    }
     return "";
   };
 
-  const orderId = getOrderIdFromHash();
+  const orderId = getOrderId();
 
   useEffect(() => {
     const fetchOrderAndCourse = async () => {
