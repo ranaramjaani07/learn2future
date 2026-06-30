@@ -9,7 +9,7 @@ export const CONFIG = {
 
   // ── RAZORPAY ─────────────────────────────────────────────
   // Razorpay Dashboard → Settings → API Keys se copy karo
-  RAZORPAY_KEY_ID:"rzp_live_T5gPqKuOFluQmG"  // jaise: rzp_live_T3sKohSHme4Sfk
+  RAZORPAY_KEY_ID:"rzp_live_T5gPqKuOFluQmG",  // jaise: rzp_live_T3sKohSHme4Sfk
   RAZORPAY_KEY_SECRET: "LNEM0vdXBCPqZVTVcb14quOK",         // jaise: abc123xyz789...
   RAZORPAY_WEBHOOK_SECRET: "Learn2future@2026webhooksecret", // Razorpay Webhooks page se
 
