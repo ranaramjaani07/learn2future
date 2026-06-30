@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { collection, getDocs, query, where, limit } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { Blog as BlogType } from "../types";
@@ -22,7 +22,9 @@ import {
 import { BOOTSTRAP_BLOGS } from "../lib/bootstrapBlogs";
 
 export const BlogDetails: React.FC = () => {
-  const { selectedBlogSlug, setCurrentPage, logUserActivity } = useApp();
+  const { slug } = useParams<{ slug: string }>();
+  const selectedBlogSlug = slug || null;
+  const { setCurrentPage, logUserActivity } = useApp();
   const [blog, setBlog] = useState<BlogType | null>(null);
   const [related, setRelated] = useState<BlogType[]>([]);
   const [loading, setLoading] = useState<boolean>(true);

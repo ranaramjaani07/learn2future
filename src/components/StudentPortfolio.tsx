@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { SEO } from "./SEO";
 import { 
@@ -45,6 +46,7 @@ import {
   serverTimestamp 
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../firebase";
+import { compressAndUploadImage } from "../lib/imageUpload";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 
 interface Cheer {
@@ -56,12 +58,15 @@ interface Cheer {
 }
 
 export const StudentPortfolio: React.FC = () => {
+  const { username } = useParams<{ username: string }>();
   const { 
-    selectedStudentUsername, 
+    dbUser,
     setCurrentPage, 
     user,
     showToast 
   } = useApp();
+
+  const selectedStudentUsername = username || (dbUser as any)?.username || (user?.displayName ? user.displayName.toLowerCase().replace(/\s+/g, "-") : null);
 
   const [loading, setLoading] = useState(true);
   const [student, setStudent] = useState<any | null>(null);
@@ -102,6 +107,7 @@ export const StudentPortfolio: React.FC = () => {
 
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
 
   // 1. Fetch Student Portfolio data on Mount/Username shift
   useEffect(() => {
@@ -240,15 +246,12 @@ export const StudentPortfolio: React.FC = () => {
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 1.5 * 1024 * 1024) {
-        showToast("Image size exceeds 1.5MB threshold. Please upload a compressed avatar.", "error");
+      if (file.size > 10 * 1024 * 1024) {
+        showToast("Image size exceeds 10MB threshold.", "error");
         return;
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setEditingData(prev => ({ ...prev, profilePhoto: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
+      setAvatarFile(file);
+      setEditingData(prev => ({ ...prev, profilePhoto: URL.createObjectURL(file) }));
     }
   };
 
@@ -354,6 +357,15 @@ export const StudentPortfolio: React.FC = () => {
         return;
       }
 
+      let finalPhotoURL = student.profilePhoto || "";
+
+      if (avatarFile) {
+        // Compress on the fly and upload to secure Firebase Storage
+        finalPhotoURL = await compressAndUploadImage(avatarFile, `portfolios/${student.id}`);
+      } else if (editingData.profilePhoto && (editingData.profilePhoto.startsWith("http://") || editingData.profilePhoto.startsWith("https://"))) {
+        finalPhotoURL = editingData.profilePhoto;
+      }
+
       const updatedPayload = {
         fullName: editingData.fullName.trim(),
         username: usernameClean,
@@ -375,7 +387,7 @@ export const StudentPortfolio: React.FC = () => {
         userSuccessStory: editingData.userSuccessStory.trim(),
         futureGoals: editingData.futureGoals.trim(),
         favoriteLearningTopics: editingData.favoriteLearningTopics.split(",").map((s: string) => s.trim()).filter(Boolean),
-        profilePhoto: editingData.profilePhoto,
+        profilePhoto: finalPhotoURL,
         
         // Success story fields
         aiBlogTitle: editingData.aiBlogTitle || student.aiBlogTitle || "",

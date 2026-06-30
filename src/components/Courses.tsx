@@ -26,6 +26,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage, handleFirestoreError, OperationType } from "../firebase";
 import { Course, Order } from "../types";
 import { SEO } from "./SEO";
+import { compressAndUploadImage } from "../lib/imageUpload";
 
 export const Courses: React.FC = () => {
   const navigate = useNavigate();
@@ -456,64 +457,7 @@ ${course.title}
     setTimeout(() => setCopySuccess(false), 2000);
   };
 
-  // Helper to compress images on client side to prevent excessively large payload writes
-  const compressImage = (base64Str: string, maxWidth = 800, maxHeight = 800, quality = 0.8): Promise<string> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.src = base64Str;
-      img.onload = () => {
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          }
-        } else {
-          if (height > maxHeight) {
-            width = Math.round((width * maxHeight) / height);
-            height = maxHeight;
-          }
-        }
-
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL("image/jpeg", quality));
-        } else {
-          resolve(base64Str);
-        }
-      };
-      img.onerror = () => {
-        resolve(base64Str);
-      };
-    });
-  };
-
-  // Helper to convert base64 back to a Blob or File for Storage upload
-  const base64ToBlob = (base64Str: string): Blob => {
-    try {
-      const parts = base64Str.split(";base64,");
-      const contentType = parts[0].split(":")[1] || "image/jpeg";
-      const raw = window.atob(parts[1]);
-      const rawLength = raw.length;
-      const uInt8Array = new Uint8Array(rawLength);
-      for (let i = 0; i < rawLength; ++i) {
-        uInt8Array[i] = raw.charCodeAt(i);
-      }
-      return new Blob([uInt8Array], { type: contentType });
-    } catch (e) {
-      console.warn("base64ToBlob failure, returning small empty blob", e);
-      return new Blob([], { type: "image/jpeg" });
-    }
-  };
-
-  // Image Selection and convert to base64 preview
+  // Image Selection and convert to preview URL
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -531,36 +475,9 @@ ${course.title}
         return;
       }
 
-      // Check for size limit of 2MB max
-      const maxBytes = 2 * 1024 * 1024; // 2MB
-      if (file.size > maxBytes) {
-        setErrorNotice(`The chosen image file is too large (${(file.size / (1024 * 1024)).toFixed(2)}MB). Maximum allowed size is 2MB.`);
-        setScreenshotFile(null);
-        setScreenshotPreview("");
-        if (e.target) e.target.value = "";
-        return;
-      }
-
       setErrorNotice("");
-
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const rawBase64 = reader.result as string;
-        try {
-          // Compress on-the-fly to max width 800px to ensure tiny sizes (< 100KB)
-          const compressedBase64 = await compressImage(rawBase64, 800, 800, 0.75);
-          setScreenshotPreview(compressedBase64);
-          
-          // Convert optimized base64 back to Blob for standard Firebase Storage upload
-          const optimizedBlob = base64ToBlob(compressedBase64);
-          setScreenshotFile(optimizedBlob as any);
-        } catch (err) {
-          console.error("Compression flow error, falling back to original file", err);
-          setScreenshotFile(file);
-          setScreenshotPreview(rawBase64);
-        }
-      };
-      reader.readAsDataURL(file);
+      setScreenshotFile(file);
+      setScreenshotPreview(URL.createObjectURL(file));
     }
   };
 
@@ -589,63 +506,19 @@ ${course.title}
       let downloadURL = "";
 
       try {
-        // 1. Upload screenshot to Firebase Storage using uploadBytesResumable
-        if (screenshotFile && screenshotFile.size > 2 * 1024 * 1024) {
-          throw new Error("File exceeds 2MB limit.");
+        if (!screenshotFile) {
+          throw new Error("No screenshot file selected.");
         }
-        
-        const timestamp = Date.now();
-        const extension = screenshotPreview.includes("image/png") ? "png" : "jpg";
-        const storageRef = ref(storage, `orders/${user.uid}_${timestamp}_screenshot.${extension}`);
-        
-        setUploadProgress(0);
-        
-        const uploadTask = uploadBytesResumable(storageRef, screenshotFile as Blob);
-        
-        await Promise.race([
-          new Promise<void>((resolvePromise, rejectPromise) => {
-            uploadTask.on(
-              "state_changed",
-              (snapshot) => {
-                const progress = Math.round(
-                  (snapshot.bytesTransferred / snapshot.totalBytes) * 100
-                );
-                setUploadProgress(progress);
-              },
-              (error) => {
-                rejectPromise(error);
-              },
-              () => {
-                resolvePromise();
-              }
-            );
-          }),
-          new Promise<void>((_, rejectPromise) => {
-            setTimeout(() => {
-              try {
-                uploadTask.cancel();
-              } catch (cancelErr) {
-                console.warn("Could not cancel upload task after timeout:", cancelErr);
-              }
-              rejectPromise(new Error("Firebase Storage upload timed out. Bypassing upload and falling back to ultra-optimized inline image representation."));
-            }, 3500);
-          })
-        ]);
-        
-        downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+        setUploadProgress(35);
+        // High performance image compression and secure Firebase Storage upload directly
+        downloadURL = await compressAndUploadImage(screenshotFile, "orders");
         setUploadProgress(100);
       } catch (storageError: any) {
-        console.warn("Storage upload failed. Falling back to inline base64:", storageError);
-        // Ensure error triggers if it exceeded the physical limit
-        if (storageError?.message?.includes("exceeds 1024") || storageError?.message?.includes("exceeds 2MB limit") || (screenshotFile && screenshotFile.size > 2 * 1024 * 1024)) {
-          setErrorNotice("Upload failed: File exceeds 2MB limit.");
-          setSubmitting(false);
-          setUploadProgress(null);
-          return;
-        }
-        // Fallback to inline preview if storage isn't accessible or configured
-        downloadURL = screenshotPreview;
-        setUploadProgress(100);
+        console.error("Storage upload failed:", storageError);
+        setErrorNotice(`Failed to upload transaction proof: ${storageError.message || storageError}`);
+        setSubmitting(false);
+        setUploadProgress(null);
+        return;
       }
 
       if (!downloadURL) {
@@ -1137,14 +1010,16 @@ ${course.title}
                         >
                           {loggingIn ? "Connecting Google..." : "Sign In & Progress"}
                         </button>
-                        <button
-                          onClick={() => {
-                            loginAsDemoStudent();
-                          }}
-                          className="bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 font-display font-semibold text-xs py-2.5 px-4 rounded-xl transition-colors w-full"
-                        >
-                          Demo Student Bypass (Iframe Safe)
-                        </button>
+                        {!(import.meta as any).env?.PROD && (
+                          <button
+                            onClick={() => {
+                              loginAsDemoStudent();
+                            }}
+                            className="bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 font-display font-semibold text-xs py-2.5 px-4 rounded-xl transition-colors w-full"
+                          >
+                            Demo Student Bypass (Iframe Safe)
+                          </button>
+                        )}
                       </div>
                       {loginError && (
                         <p className="text-[10px] text-red-500 font-mono leading-normal self-start border border-red-500/10 bg-red-500/5 p-2 rounded-lg w-full text-left">

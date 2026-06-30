@@ -55,6 +55,7 @@ import {
 } from "lucide-react";
 import { ref, uploadBytes as put, getDownloadURL } from "firebase/storage";
 import { storage } from "../firebase";
+import { compressAndUploadImage } from "../lib/imageUpload";
 
 // Custom TextStyle extension with font-size custom attributes
 const FontSize = TextStyle.extend({
@@ -269,99 +270,29 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   };
 
-  // Helper to compress images on client side to prevent excessively large payload writes
-  const compressImage = (base64Str: string, maxWidth = 800, maxHeight = 800, quality = 0.8): Promise<string> => {
-    return new Promise((resolve) => {
-      const img = new globalThis.Image();
-      img.src = base64Str;
-      img.onload = () => {
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          }
-        } else {
-          if (height > maxHeight) {
-            width = Math.round((width * maxHeight) / height);
-            height = maxHeight;
-          }
-        }
-
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL("image/jpeg", quality));
-        } else {
-          resolve(base64Str);
-        }
-      };
-      img.onerror = () => {
-        resolve(base64Str);
-      };
-    });
-  };
+  // Deleted inline compressImage helper in favor of optimized global imageUpload module
 
   // Image Upload handler
   const handleLocalImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 2 * 1024 * 1024) {
-      alert("Chosen file size exceeds the 2MB physical ceiling. Select a more compact asset.");
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Chosen file size exceeds 10MB limit.");
       return;
     }
 
     setImageUploading(true);
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const base64 = reader.result as string;
-      try {
-        // Compress and shrink to make it robust against storage timeout/quota limit and database limit
-        const compressedBase64 = await compressImage(base64, 1000, 1000, 0.75);
-        
-        const timestamp = Date.now();
-        const cleanFileName = file.name.replace(/[^a-zA-Z0-9]/g, "_");
-        const extension = file.type === "image/png" ? "png" : "jpg";
-        const storageRef = ref(storage, `blogs/editor/${timestamp}_${cleanFileName}.${extension}`);
-
-        // Base64 to Blob conversion
-        const parts = compressedBase64.split(";base64,");
-        const contentType = parts[0].split(":")[1] || "image/jpeg";
-        const raw = window.atob(parts[1]);
-        const uInt8Array = new Uint8Array(raw.length);
-        for (let i = 0; i < raw.length; ++i) {
-          uInt8Array[i] = raw.charCodeAt(i);
-        }
-        const blob = new Blob([uInt8Array], { type: contentType });
-
-        const uploadPromise = put(storageRef, blob);
-        const timeoutPromise = new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error("Storage upload timed out, activating inline fallback...")), 3500)
-        );
-        const uploadTask = await Promise.race([uploadPromise, timeoutPromise]);
-        const downloadUrl = await getDownloadURL(uploadTask.ref);
-        setImageUrl(downloadUrl);
-      } catch (err) {
-        console.warn("Storage target upload unavailable, using secure local inline base64 encode fallback", err);
-        try {
-          // Attempt fallback to a highly compressed base64 representation rather than the huge original
-          const compressedFallback = await compressImage(base64, 800, 800, 0.7);
-          setImageUrl(compressedFallback);
-        } catch (_) {
-          setImageUrl(base64);
-        }
-      } finally {
-        setImageUploading(false);
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      // Compress on-the-fly to < 200KB and upload securely to Firebase Storage
+      const downloadUrl = await compressAndUploadImage(file, "blogs/editor");
+      setImageUrl(downloadUrl);
+    } catch (err: any) {
+      console.error("[RichTextEditor] Image upload failed:", err);
+      alert(`Could not upload image: ${err?.message || err}`);
+    } finally {
+      setImageUploading(false);
+    }
   };
 
   // Insert Image trigger

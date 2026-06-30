@@ -1,4 +1,4 @@
-import React, { Suspense } from "react";
+import React, { Suspense, useEffect } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AppProvider, useApp } from "./context/AppContext";
 import { Navbar } from "./components/Navbar";
@@ -38,8 +38,55 @@ const RouteLoadingFallback: React.FC = () => (
 );
 
 const MainLayout: React.FC = () => {
+  const routerLocation = useLocation();
+  const path = routerLocation.pathname;
+
+  // Derive currentPage from active router location path
+  let currentPage = "home";
+  if (path.startsWith("/course/")) {
+    currentPage = "course-details";
+  } else if (path.startsWith("/blog/")) {
+    const slug = path.split("/blog/")[1];
+    if (slug) {
+      currentPage = "blog-details";
+    } else {
+      currentPage = "blog";
+    }
+  } else if (path.startsWith("/student/")) {
+    currentPage = "student-portfolio";
+  } else if (path === "/courses" || path === "/courses/") {
+    currentPage = "courses";
+  } else if (path === "/blogs" || path === "/blogs/" || path === "/blog" || path === "/blog/") {
+    currentPage = "blog";
+  } else if (path === "/about" || path === "/about/") {
+    currentPage = "about";
+  } else if (path === "/contact" || path === "/contact/") {
+    currentPage = "contact";
+  } else if (path === "/terms" || path === "/terms/") {
+    currentPage = "terms";
+  } else if (path === "/privacy" || path === "/privacy/") {
+    currentPage = "privacy";
+  } else if (path === "/refund-policy" || path === "/refund-policy/") {
+    currentPage = "refund-policy";
+  } else if (path === "/affiliate" || path === "/affiliate/") {
+    currentPage = "affiliate";
+  } else if (path === "/cart" || path === "/cart/") {
+    currentPage = "cart";
+  } else if (path === "/thank-you" || path === "/thank-you/") {
+    currentPage = "thank-you";
+  } else if (path === "/my-enrollments" || path === "/my-enrollments/") {
+    currentPage = "my-enrollments";
+  } else if (path === "/admin-login" || path === "/admin-login/") {
+    currentPage = "admin-login";
+  } else if (path === "/admin-dashboard" || path === "/admin-dashboard/") {
+    currentPage = "admin-dashboard";
+  } else if (path === "/onboarding" || path === "/onboarding/") {
+    currentPage = "onboarding";
+  } else if (path === "/student-portfolio" || path === "/student-portfolio/") {
+    currentPage = "student-portfolio";
+  }
+
   const { 
-    currentPage, 
     authError, 
     setAuthError, 
     dbUser, 
@@ -55,8 +102,48 @@ const MainLayout: React.FC = () => {
     setCurrentPage,
     isAdmin,
     toast,
-    globalSettings
+    globalSettings,
+    loading,
+    loadingProfile,
+    logUserActivity
   } = useApp();
+
+  // Onboarding routing engine
+  useEffect(() => {
+    if (loading || loadingProfile) return;
+    if (user) {
+      // 1. If password user and NOT verified, force to My Enrollments page
+      if (!user.emailVerified && user.providerData.some(p => p.providerId === "password")) {
+        if (currentPage !== "my-enrollments") {
+          setCurrentPage("my-enrollments");
+        }
+        return;
+      }
+
+      // 2. If verified/social user and NOT complete onboarding, force to onboarding
+      if (!isQuotaExceeded && (!dbUser || !dbUser.onboardingCompleted)) {
+        if (currentPage !== "onboarding") {
+          setCurrentPage("onboarding");
+        }
+      } else if (currentPage === "onboarding") {
+        setCurrentPage("my-enrollments");
+      }
+    } else {
+      if (currentPage === "onboarding") {
+        setCurrentPage("home");
+      }
+    }
+  }, [user, dbUser, loading, loadingProfile, currentPage, isQuotaExceeded, setCurrentPage]);
+
+  // Dynamic page interaction tracker matching event triggers
+  useEffect(() => {
+    if (loading || loadingProfile || !user) return;
+    if (currentPage === "courses") {
+      logUserActivity("Course View", "Visited Courses Explorer Catalog");
+    } else if (currentPage === "blog") {
+      logUserActivity("Blog View", "Browsed Knowledge Blog Articles");
+    }
+  }, [user, currentPage, loading, loadingProfile, logUserActivity]);
 
   if (dbUser && dbUser.disabled) {
     return (
@@ -87,8 +174,6 @@ const MainLayout: React.FC = () => {
       </div>
     );
   }
-
-  const routerLocation = useLocation();
 
   const getPageSeo = () => {
     // If it's a detail page, we return null so the detail component itself handles it
@@ -308,15 +393,17 @@ const MainLayout: React.FC = () => {
                   >
                     Quick Google Sign-In
                   </button>
-                  <button 
-                    onClick={() => {
-                      loginAsDemoStudent();
-                      setAuthModalOpen(false);
-                    }}
-                    className="w-full bg-brand-gold hover:bg-[#ffd34d] text-black py-3 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-colors"
-                  >
-                    Demo Student Bypass (Iframe Safe)
-                  </button>
+                  {!(import.meta as any).env?.PROD && (
+                    <button 
+                      onClick={() => {
+                        loginAsDemoStudent();
+                        setAuthModalOpen(false);
+                      }}
+                      className="w-full bg-brand-gold hover:bg-[#ffd34d] text-black py-3 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-colors"
+                    >
+                      Demo Student Bypass (Iframe Safe)
+                    </button>
+                  )}
                 </div>
               )}
 

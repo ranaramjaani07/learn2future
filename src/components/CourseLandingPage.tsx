@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { 
   ArrowLeft, Star, Users, BookOpen, Clock, Award, Play, CheckCircle, 
@@ -250,10 +250,11 @@ const DEFAULT_COURSES_FALLBACK: Course[] = [
 ];
 
 export const CourseLandingPage: React.FC<{ previewCourse?: Course }> = ({ previewCourse }) => {
+  const { slug } = useParams<{ slug: string }>();
+  const selectedCourseSlug = slug || null;
   const {
     user,
     dbUser,
-    selectedCourseSlug,
     setCurrentPage,
     addToCart,
     showToast,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { motion } from "motion/react";
 import { 
@@ -16,8 +16,55 @@ import {
 } from "lucide-react";
 
 export const Navbar: React.FC = () => {
+  const location = useLocation();
+  const path = location.pathname;
+
+  // Derive currentPage from active router location path
+  let currentPage = "home";
+  if (path.startsWith("/course/")) {
+    currentPage = "course-details";
+  } else if (path.startsWith("/blog/")) {
+    const slug = path.split("/blog/")[1];
+    if (slug) {
+      currentPage = "blog-details";
+    } else {
+      currentPage = "blog";
+    }
+  } else if (path.startsWith("/student/")) {
+    currentPage = "student-portfolio";
+  } else if (path === "/courses" || path === "/courses/") {
+    currentPage = "courses";
+  } else if (path === "/blogs" || path === "/blogs/" || path === "/blog" || path === "/blog/") {
+    currentPage = "blog";
+  } else if (path === "/about" || path === "/about/") {
+    currentPage = "about";
+  } else if (path === "/contact" || path === "/contact/") {
+    currentPage = "contact";
+  } else if (path === "/terms" || path === "/terms/") {
+    currentPage = "terms";
+  } else if (path === "/privacy" || path === "/privacy/") {
+    currentPage = "privacy";
+  } else if (path === "/refund-policy" || path === "/refund-policy/") {
+    currentPage = "refund-policy";
+  } else if (path === "/affiliate" || path === "/affiliate/") {
+    currentPage = "affiliate";
+  } else if (path === "/cart" || path === "/cart/") {
+    currentPage = "cart";
+  } else if (path === "/thank-you" || path === "/thank-you/") {
+    currentPage = "thank-you";
+  } else if (path === "/my-enrollments" || path === "/my-enrollments/") {
+    currentPage = "my-enrollments";
+  } else if (path === "/admin-login" || path === "/admin-login/") {
+    currentPage = "admin-login";
+  } else if (path === "/admin-dashboard" || path === "/admin-dashboard/") {
+    currentPage = "admin-dashboard";
+  } else if (path === "/onboarding" || path === "/onboarding/") {
+    currentPage = "onboarding";
+  } else if (path === "/student-portfolio" || path === "/student-portfolio/") {
+    currentPage = "student-portfolio";
+  }
+
   const { 
-    currentPage, 
     setCurrentPage, 
     user, 
     isAdmin, 
@@ -27,8 +74,7 @@ export const Navbar: React.FC = () => {
     loginAsDemoStudent,
     loginAsDemoAdmin,
     logout,
-    cart,
-    setSelectedStudentUsername
+    cart
   } = useApp();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -198,8 +244,7 @@ export const Navbar: React.FC = () => {
                         onClick={() => {
                           setProfileDropdownOpen(false);
                           const slug = user?.displayName?.toLowerCase().replace(/\s+/g, "-") || "new-student";
-                          setSelectedStudentUsername(slug);
-                          setCurrentPage("student-portfolio" as any);
+                          setCurrentPage("student-portfolio", slug);
                         }}
                         className="flex items-center space-x-2 w-full px-3 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-900 rounded-lg transition-colors border-b border-neutral-100 dark:border-neutral-900/40 pb-2 mb-1"
                       >
@@ -263,27 +308,31 @@ export const Navbar: React.FC = () => {
                         </svg>
                         <span>Continue with Google</span>
                       </button>
-                      <div className="h-px bg-neutral-100 dark:bg-neutral-900 my-1"></div>
-                      <button
-                        onClick={() => {
-                          setLoginDropdownOpen(false);
-                          loginAsDemoStudent();
-                        }}
-                        className="flex items-center space-x-2 w-full px-3 py-2.5 text-xs text-left font-bold text-neutral-900 dark:text-brand-gold hover:bg-neutral-100 dark:hover:bg-neutral-900 rounded-lg transition-colors cursor-pointer"
-                      >
-                        <UserIcon className="w-3.5 h-3.5" />
-                        <span>Demo Student Bypass</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setLoginDropdownOpen(false);
-                          loginAsDemoAdmin();
-                        }}
-                        className="flex items-center space-x-2 w-full px-3 py-2.5 text-xs text-left font-semibold text-zinc-500 hover:bg-neutral-100 dark:hover:bg-neutral-900 rounded-lg transition-colors cursor-pointer"
-                      >
-                        <LayoutDashboard className="w-3.5 h-3.5" />
-                        <span>Demo Admin Bypass</span>
-                      </button>
+                      {!(import.meta as any).env?.PROD && (
+                        <>
+                          <div className="h-px bg-neutral-100 dark:bg-neutral-900 my-1"></div>
+                          <button
+                            onClick={() => {
+                              setLoginDropdownOpen(false);
+                              loginAsDemoStudent();
+                            }}
+                            className="flex items-center space-x-2 w-full px-3 py-2.5 text-xs text-left font-bold text-neutral-900 dark:text-brand-gold hover:bg-neutral-100 dark:hover:bg-neutral-900 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <UserIcon className="w-3.5 h-3.5" />
+                            <span>Demo Student Bypass</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setLoginDropdownOpen(false);
+                              loginAsDemoAdmin();
+                            }}
+                            className="flex items-center space-x-2 w-full px-3 py-2.5 text-xs text-left font-semibold text-zinc-500 hover:bg-neutral-100 dark:hover:bg-neutral-900 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <LayoutDashboard className="w-3.5 h-3.5" />
+                            <span>Demo Admin Bypass</span>
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}
@@ -398,15 +447,17 @@ export const Navbar: React.FC = () => {
                 >
                   Sign In with Google
                 </button>
-                <button
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    loginAsDemoStudent();
-                  }}
-                  className="w-full text-center font-display text-sm font-semibold text-black bg-brand-gold px-4 py-3 rounded-lg cursor-pointer"
-                >
-                  Demo Student Bypass
-                </button>
+                {!(import.meta as any).env?.PROD && (
+                  <button
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      loginAsDemoStudent();
+                    }}
+                    className="w-full text-center font-display text-sm font-semibold text-black bg-brand-gold px-4 py-3 rounded-lg cursor-pointer"
+                  >
+                    Demo Student Bypass
+                  </button>
+                )}
               </div>
             )}
           </div>
