@@ -82,8 +82,8 @@
       "destination": "/api/sitemap?type=images"
     },
     {
-      "source": "/:path*",
-      "destination": "/index.html"
+      "source": "/(.*)",
+      "destination": "/"
     }
   ],
   "functions": {
