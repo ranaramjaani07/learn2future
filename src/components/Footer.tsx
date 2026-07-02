@@ -167,6 +167,12 @@ export const Footer: React.FC = () => {
               Refund Policy
             </Link>
             <Link 
+              to="/influencer-promotion-policy"
+              className="text-xs text-neutral-400 dark:text-neutral-500 hover:text-brand-gold transition-colors font-mono uppercase"
+            >
+              Influencer Promotion Policy
+            </Link>
+            <Link 
               to="/admin-login"
               className="text-xs text-neutral-400 dark:text-neutral-500 hover:text-brand-gold transition-colors font-mono uppercase tracking-widest flex items-center gap-1"
             >

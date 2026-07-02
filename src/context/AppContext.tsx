@@ -67,7 +67,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
-export type CurrentPage = "home" | "courses" | "about" | "contact" | "admin-login" | "admin-dashboard" | "my-enrollments" | "blog" | "blog-details" | "terms" | "privacy" | "onboarding" | "cart" | "thank-you" | "course-details" | "student-portfolio" | "refund-policy" | "affiliate";
+export type CurrentPage = "home" | "courses" | "about" | "contact" | "admin-login" | "admin-dashboard" | "my-enrollments" | "blog" | "blog-details" | "terms" | "privacy" | "onboarding" | "cart" | "thank-you" | "course-details" | "student-portfolio" | "refund-policy" | "affiliate" | "influencer-promotion-policy";
 
 export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   upiId: "digitalcoursesbay@upi",

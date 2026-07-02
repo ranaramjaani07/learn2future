@@ -20,6 +20,7 @@ const BlogDetails = React.lazy(() => import("./components/BlogDetails").then(m =
 const Terms = React.lazy(() => import("./components/Terms").then(m => ({ default: m.Terms })));
 const Privacy = React.lazy(() => import("./components/Privacy").then(m => ({ default: m.Privacy })));
 const RefundPolicy = React.lazy(() => import("./components/RefundPolicy").then(m => ({ default: m.RefundPolicy })));
+const InfluencerPromotionPolicy = React.lazy(() => import("./components/InfluencerPromotionPolicy").then(m => ({ default: m.InfluencerPromotionPolicy })));
 const AffiliateInfo = React.lazy(() => import("./components/AffiliateInfo").then(m => ({ default: m.AffiliateInfo })));
 const Onboarding = React.lazy(() => import("./components/Onboarding").then(m => ({ default: m.Onboarding })));
 const CartPage = React.lazy(() => import("./components/CartPage").then(m => ({ default: m.CartPage })));
@@ -68,6 +69,8 @@ const MainLayout: React.FC = () => {
     currentPage = "privacy";
   } else if (path === "/refund-policy" || path === "/refund-policy/") {
     currentPage = "refund-policy";
+  } else if (path === "/influencer-promotion-policy" || path === "/influencer-promotion-policy/") {
+    currentPage = "influencer-promotion-policy";
   } else if (path === "/affiliate" || path === "/affiliate/") {
     currentPage = "affiliate";
   } else if (path === "/cart" || path === "/cart/") {
@@ -200,6 +203,8 @@ const MainLayout: React.FC = () => {
         return { title: "Shopping Cart | Learn 2 Future", description: "Your pending educational investments. Upgrade your future in a single click.", image: defaultImg };
       case "thank-you":
         return { title: "Order Confirmed! | Learn 2 Future", description: "Success! Your enrollment passes are active. Welcome to the learning network.", image: defaultImg };
+      case "influencer-promotion-policy":
+        return { title: "Influencer Promotion Policy | Learn 2 Future", description: "Review our Affiliate & Influencer Program Policy. Earn commissions promoting premium future-tech learning materials.", image: defaultImg };
       default:
         return { title: defaultTitle, description: defaultDesc, image: defaultImg };
     }
@@ -296,6 +301,7 @@ const MainLayout: React.FC = () => {
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/refund-policy" element={<RefundPolicy />} />
                 <Route path="/refund" element={<Navigate to="/refund-policy" replace />} />
+                <Route path="/influencer-promotion-policy" element={<InfluencerPromotionPolicy />} />
                 <Route path="/affiliate" element={<AffiliateInfo />} />
                 <Route path="/cart" element={<CartPage />} />
                 <Route path="/thank-you" element={<ThankYou />} />
