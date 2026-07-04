@@ -32,24 +32,16 @@ export const ThankYou: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Helper: Try to extract Order ID from URL Query Parameter (?order=ORDER_ID) or Hash e.g. #thank-you/ORDER_ID
-  const getOrderId = () => {
-    // 1. Check for query parameter (modern standard)
-    const searchParams = new URLSearchParams(window.location.search);
-    const queryOrder = searchParams.get("order");
-    if (queryOrder) return queryOrder;
-
-    // 2. Check for hash (backward compatibility)
+  // Extract Order ID from query param ?order=ID (React Router compatible)
+  // Also supports legacy hash-based URLs for backward compatibility
+  const getOrderId = (): string => {
+    const params = new URLSearchParams(window.location.search);
+    const fromQuery = params.get("order");
+    if (fromQuery) return fromQuery;
+    // Legacy fallback: hash-based IDs
     const hash = window.location.hash.replace("#", "");
-    if (hash.startsWith("thank-you/")) {
-      return hash.replace("thank-you/", "");
-    }
-    if (hash.startsWith("order-success/")) {
-      return hash.replace("order-success/", "");
-    }
-    if (hash && !hash.includes("/")) {
-      return hash;
-    }
+    if (hash.startsWith("thank-you/")) return hash.replace("thank-you/", "");
+    if (hash.startsWith("order-success/")) return hash.replace("order-success/", "");
     return "";
   };
 

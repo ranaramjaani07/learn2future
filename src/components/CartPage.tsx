@@ -10,7 +10,6 @@ import {
 import { collection, addDoc, serverTimestamp, doc, getDoc, query, where, getDocs, setDoc } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage, handleFirestoreError, OperationType } from "../firebase";
-import { compressAndUploadImage } from "../lib/imageUpload";
 
 export const CartPage: React.FC = () => {
   const { 
@@ -80,17 +79,90 @@ export const CartPage: React.FC = () => {
     setTimeout(() => setCopySuccess(false), 2000);
   };
 
+  // Helper to compress images on client side to prevent excessively large payload writes
+  const compressImage = (base64Str: string, maxWidth = 800, maxHeight = 800, quality = 0.8): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = base64Str;
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        } else {
+          resolve(base64Str);
+        }
+      };
+      img.onerror = () => {
+        resolve(base64Str);
+      };
+    });
+  };
+
+  // Helper to convert base64 back to a Blob or File for Storage upload
+  const base64ToBlob = (base64Str: string): Blob => {
+    try {
+      const parts = base64Str.split(";base64,");
+      const contentType = parts[0].split(":")[1] || "image/jpeg";
+      const raw = window.atob(parts[1]);
+      const rawLength = raw.length;
+      const uInt8Array = new Uint8Array(rawLength);
+      for (let i = 0; i < rawLength; ++i) {
+        uInt8Array[i] = raw.charCodeAt(i);
+      }
+      return new Blob([uInt8Array], { type: contentType });
+    } catch (e) {
+      console.warn("base64ToBlob failure, returning small empty blob", e);
+      return new Blob([], { type: "image/jpeg" });
+    }
+  };
+
   // Capture file selections for UPI screens
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        setUploadError("This image exceeds our maximum 10MB size filter.");
+      if (file.size > 2 * 1024 * 1024) {
+        setUploadError("This image exceeds our maximum 2MB size filter. Please optimize/crop or capture a smaller screenshot of the transaction.");
         return;
       }
       setUploadError("");
-      setScreenshotFile(file);
-      setScreenshotPreview(URL.createObjectURL(file));
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const rawBase64 = reader.result as string;
+        try {
+          // Compress on-the-fly to max width 800px to ensure tiny sizes (< 100KB)
+          const compressedBase64 = await compressImage(rawBase64, 800, 800, 0.75);
+          setScreenshotPreview(compressedBase64);
+          
+          // Convert optimized base64 back to Blob for standard Firebase Storage upload
+          const optimizedBlob = base64ToBlob(compressedBase64);
+          setScreenshotFile(optimizedBlob as any);
+        } catch (err) {
+          console.error("Compression flow error inside cart, falling back to original file", err);
+          setScreenshotFile(file);
+          setScreenshotPreview(rawBase64);
+        }
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -222,13 +294,9 @@ export const CartPage: React.FC = () => {
     setUploadError("");
     const mockPaymentId = "pay_sim_" + Math.random().toString(36).substring(2, 10);
     try {
-      const idToken = user ? await user.getIdToken() : "";
       const verifyRes = await fetch("/api/pay/verify-payment", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(idToken ? { "Authorization": `Bearer ${idToken}` } : {})
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           razorpay_payment_id: mockPaymentId,
           razorpay_order_id: targetSimOrder.id,
@@ -323,13 +391,9 @@ export const CartPage: React.FC = () => {
       setSubmittingOrder(true);
       setUploadError("");
 
-      const idToken = user ? await user.getIdToken() : "";
       const verifyRes = await fetch("/api/pay/verify-payment", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(idToken ? { "Authorization": `Bearer ${idToken}` } : {})
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           razorpay_payment_id: paymentResponse.razorpay_payment_id,
           razorpay_order_id: paymentResponse.razorpay_order_id,
@@ -464,13 +528,9 @@ export const CartPage: React.FC = () => {
     try {
       // 1. Create native checkout order payload in backend session
       addCheckoutLog("Contacting backend service to create Razorpay Order Session (/api/pay/create-order)...");
-      const idToken = user ? await user.getIdToken() : "";
       const response = await fetch("/api/pay/create-order", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(idToken ? { "Authorization": `Bearer ${idToken}` } : {})
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           courseId: cart[0]?.productId || "multiple_items",
           amount: finalCost,
@@ -635,23 +695,65 @@ export const CartPage: React.FC = () => {
       let downloadURL = "";
 
       try {
-        if (!screenshotFile) {
-          throw new Error("No screenshot file selected.");
+        if (screenshotFile && screenshotFile.size > 2 * 1024 * 1024) {
+          throw new Error("File exceeds 2MB limit.");
         }
-        setUploadProgress(30);
-        // Uses high performance image compression and secure Firebase Storage upload directly
-        downloadURL = await compressAndUploadImage(screenshotFile, "orders");
+        
+        const timestamp = Date.now();
+        const extension = screenshotPreview.includes("image/png") ? "png" : "jpg";
+        const storageRef = ref(storage, `orders/${user.uid}_${timestamp}_screenshot.${extension}`);
+        
+        setUploadProgress(0);
+        
+        const uploadTask = uploadBytesResumable(storageRef, screenshotFile as Blob);
+        
+        await Promise.race([
+          new Promise<void>((resolvePromise, rejectPromise) => {
+            uploadTask.on(
+              "state_changed",
+              (snapshot) => {
+                const progress = Math.round(
+                  (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+                );
+                setUploadProgress(progress);
+              },
+              (error) => {
+                rejectPromise(error);
+              },
+              () => {
+                resolvePromise();
+              }
+            );
+          }),
+          new Promise<void>((_, rejectPromise) => {
+            setTimeout(() => {
+              try {
+                uploadTask.cancel();
+              } catch (cancelErr) {
+                console.warn("Could not cancel upload task after timeout:", cancelErr);
+              }
+              rejectPromise(new Error("Firebase Storage upload timed out. Bypassing upload and falling back to inline data URI representation."));
+            }, 6000);
+          })
+        ]);
+        
+        downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
         setUploadProgress(100);
       } catch (storageError: any) {
-        console.error("Storage upload failed:", storageError);
-        setUploadError(`Failed to upload transaction proof: ${storageError.message || storageError}`);
-        setManualSubmitting(false);
-        setUploadProgress(null);
-        return;
+        console.warn("Storage upload failed. Falling back to inline base64 representation:", storageError);
+        if (storageError?.message?.includes("exceeds 1024") || storageError?.message?.includes("exceeds 2MB limit") || (screenshotFile && screenshotFile.size > 2 * 1024 * 1024)) {
+          setUploadError("Upload failed: File exceeds 2MB limit.");
+          setManualSubmitting(false);
+          setUploadProgress(null);
+          return;
+        }
+        // Fallback to inline preview if storage isn't accessible
+        downloadURL = screenshotPreview;
+        setUploadProgress(100);
       }
 
       if (!downloadURL) {
-        throw new Error("Could not retrieve a valid download URL for your screenshot.");
+        throw new Error("Could not retrieve a valid download URL or base64 data for your screenshot.");
       }
 
       // Generate order ID conforming to rules

@@ -1,14 +1,12 @@
 import React, { useState } from "react";
 import { useApp } from "../context/AppContext";
 import { Sparkles, Compass, CheckCircle2, AlertCircle, Camera, Loader2, ArrowRight } from "lucide-react";
-import { compressAndUploadImage } from "../lib/imageUpload";
 
 export const Onboarding: React.FC = () => {
   const { user, completeOnboarding, logout } = useApp();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [profilePic, setProfilePic] = useState<string | null>(user?.photoURL || null);
-  const [profilePicFile, setProfilePicFile] = useState<File | null>(null);
   
   const [formData, setFormData] = useState({
     fullName: user?.displayName || "",
@@ -30,14 +28,15 @@ export const Onboarding: React.FC = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) { // Checked but compression will handle size down to under 200KB
-        setError("Image size exceeds 10MB threshold. Please upload a smaller avatar.");
+      if (file.size > 2 * 1024 * 1024) {
+        setError("Image size exceeds 2MB threshold. Please upload a smaller avatar.");
         return;
       }
-      setError("");
-      setProfilePicFile(file);
-      const objectUrl = URL.createObjectURL(file);
-      setProfilePic(objectUrl);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfilePic(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -61,18 +60,9 @@ export const Onboarding: React.FC = () => {
 
     setLoading(true);
     try {
-      let finalPhotoURL = user?.photoURL || "";
-
-      if (profilePicFile) {
-        // Upload compressed image to Firebase Storage and get secure URL
-        finalPhotoURL = await compressAndUploadImage(profilePicFile, `avatars/${user?.uid || "unidentified"}`);
-      } else if (profilePic && (profilePic.startsWith("http://") || profilePic.startsWith("https://"))) {
-        finalPhotoURL = profilePic;
-      }
-
       await completeOnboarding({
         ...formData,
-        photoURL: finalPhotoURL
+        photoURL: profilePic || ""
       });
     } catch (err: any) {
       setError(err?.message || "Something went wrong. Please check your network and try again.");

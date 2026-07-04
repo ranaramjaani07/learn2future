@@ -1,15 +1,17 @@
-import React, { Suspense, useEffect } from "react";
+import React, { Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AppProvider, useApp } from "./context/AppContext";
 import { Navbar } from "./components/Navbar";
 import { Footer } from "./components/Footer";
-import { Home } from "./components/Home";
-import { Courses } from "./components/Courses";
-import { SEOHead } from "./components/SEOHead";
 import { AnimatePresence, motion } from "motion/react";
 import { Sparkles, ArrowUpRight } from "lucide-react";
+import { SEOHead } from "./components/SEOHead";
 
-// Lazy loaded components for optimized bundle splitting
+// All route components lazy loaded for optimal code splitting
+const Home = React.lazy(() => import("./components/Home").then(m => ({ default: m.Home })));
+const Courses = React.lazy(() => import("./components/Courses").then(m => ({ default: m.Courses })));
+
+// Additional lazy loaded components
 const About = React.lazy(() => import("./components/About").then(m => ({ default: m.About })));
 const Contact = React.lazy(() => import("./components/Contact").then(m => ({ default: m.Contact })));
 const AdminLogin = React.lazy(() => import("./components/AdminLogin").then(m => ({ default: m.AdminLogin })));
@@ -20,7 +22,6 @@ const BlogDetails = React.lazy(() => import("./components/BlogDetails").then(m =
 const Terms = React.lazy(() => import("./components/Terms").then(m => ({ default: m.Terms })));
 const Privacy = React.lazy(() => import("./components/Privacy").then(m => ({ default: m.Privacy })));
 const RefundPolicy = React.lazy(() => import("./components/RefundPolicy").then(m => ({ default: m.RefundPolicy })));
-const InfluencerPromotionPolicy = React.lazy(() => import("./components/InfluencerPromotionPolicy").then(m => ({ default: m.InfluencerPromotionPolicy })));
 const AffiliateInfo = React.lazy(() => import("./components/AffiliateInfo").then(m => ({ default: m.AffiliateInfo })));
 const Onboarding = React.lazy(() => import("./components/Onboarding").then(m => ({ default: m.Onboarding })));
 const CartPage = React.lazy(() => import("./components/CartPage").then(m => ({ default: m.CartPage })));
@@ -39,57 +40,8 @@ const RouteLoadingFallback: React.FC = () => (
 );
 
 const MainLayout: React.FC = () => {
-  const routerLocation = useLocation();
-  const path = routerLocation.pathname;
-
-  // Derive currentPage from active router location path
-  let currentPage = "home";
-  if (path.startsWith("/course/")) {
-    currentPage = "course-details";
-  } else if (path.startsWith("/blog/")) {
-    const slug = path.split("/blog/")[1];
-    if (slug) {
-      currentPage = "blog-details";
-    } else {
-      currentPage = "blog";
-    }
-  } else if (path.startsWith("/student/")) {
-    currentPage = "student-portfolio";
-  } else if (path === "/courses" || path === "/courses/") {
-    currentPage = "courses";
-  } else if (path === "/blogs" || path === "/blogs/" || path === "/blog" || path === "/blog/") {
-    currentPage = "blog";
-  } else if (path === "/about" || path === "/about/") {
-    currentPage = "about";
-  } else if (path === "/contact" || path === "/contact/") {
-    currentPage = "contact";
-  } else if (path === "/terms" || path === "/terms/") {
-    currentPage = "terms";
-  } else if (path === "/privacy" || path === "/privacy/") {
-    currentPage = "privacy";
-  } else if (path === "/refund-policy" || path === "/refund-policy/") {
-    currentPage = "refund-policy";
-  } else if (path === "/influencer-promotion-policy" || path === "/influencer-promotion-policy/") {
-    currentPage = "influencer-promotion-policy";
-  } else if (path === "/affiliate" || path === "/affiliate/") {
-    currentPage = "affiliate";
-  } else if (path === "/cart" || path === "/cart/") {
-    currentPage = "cart";
-  } else if (path === "/thank-you" || path === "/thank-you/") {
-    currentPage = "thank-you";
-  } else if (path === "/my-enrollments" || path === "/my-enrollments/") {
-    currentPage = "my-enrollments";
-  } else if (path === "/admin-login" || path === "/admin-login/") {
-    currentPage = "admin-login";
-  } else if (path === "/admin-dashboard" || path === "/admin-dashboard/") {
-    currentPage = "admin-dashboard";
-  } else if (path === "/onboarding" || path === "/onboarding/") {
-    currentPage = "onboarding";
-  } else if (path === "/student-portfolio" || path === "/student-portfolio/") {
-    currentPage = "student-portfolio";
-  }
-
   const { 
+    currentPage, 
     authError, 
     setAuthError, 
     dbUser, 
@@ -105,48 +57,8 @@ const MainLayout: React.FC = () => {
     setCurrentPage,
     isAdmin,
     toast,
-    globalSettings,
-    loading,
-    loadingProfile,
-    logUserActivity
+    globalSettings
   } = useApp();
-
-  // Onboarding routing engine
-  useEffect(() => {
-    if (loading || loadingProfile) return;
-    if (user) {
-      // 1. If password user and NOT verified, force to My Enrollments page
-      if (!user.emailVerified && user.providerData.some(p => p.providerId === "password")) {
-        if (currentPage !== "my-enrollments") {
-          setCurrentPage("my-enrollments");
-        }
-        return;
-      }
-
-      // 2. If verified/social user and NOT complete onboarding, force to onboarding
-      if (!isQuotaExceeded && (!dbUser || !dbUser.onboardingCompleted)) {
-        if (currentPage !== "onboarding") {
-          setCurrentPage("onboarding");
-        }
-      } else if (currentPage === "onboarding") {
-        setCurrentPage("my-enrollments");
-      }
-    } else {
-      if (currentPage === "onboarding") {
-        setCurrentPage("home");
-      }
-    }
-  }, [user, dbUser, loading, loadingProfile, currentPage, isQuotaExceeded, setCurrentPage]);
-
-  // Dynamic page interaction tracker matching event triggers
-  useEffect(() => {
-    if (loading || loadingProfile || !user) return;
-    if (currentPage === "courses") {
-      logUserActivity("Course View", "Visited Courses Explorer Catalog");
-    } else if (currentPage === "blog") {
-      logUserActivity("Blog View", "Browsed Knowledge Blog Articles");
-    }
-  }, [user, currentPage, loading, loadingProfile, logUserActivity]);
 
   if (dbUser && dbUser.disabled) {
     return (
@@ -178,6 +90,8 @@ const MainLayout: React.FC = () => {
     );
   }
 
+  const routerLocation = useLocation();
+
   const getPageSeo = () => {
     // If it's a detail page, we return null so the detail component itself handles it
     if (["course-details", "student-portfolio", "blog-details"].includes(currentPage)) {
@@ -203,8 +117,6 @@ const MainLayout: React.FC = () => {
         return { title: "Shopping Cart | Learn 2 Future", description: "Your pending educational investments. Upgrade your future in a single click.", image: defaultImg };
       case "thank-you":
         return { title: "Order Confirmed! | Learn 2 Future", description: "Success! Your enrollment passes are active. Welcome to the learning network.", image: defaultImg };
-      case "influencer-promotion-policy":
-        return { title: "Influencer Promotion Policy | Learn 2 Future", description: "Review our Affiliate & Influencer Program Policy. Earn commissions promoting premium future-tech learning materials.", image: defaultImg };
       default:
         return { title: defaultTitle, description: defaultDesc, image: defaultImg };
     }
@@ -277,7 +189,7 @@ const MainLayout: React.FC = () => {
       )}
 
       {/* Main rendering viewport with smooth animations */}
-      <main className="flex-grow">
+      <main id="main-content" className="flex-grow">
         <AnimatePresence mode="wait">
           <motion.div
             key={routerLocation.pathname}
@@ -301,7 +213,6 @@ const MainLayout: React.FC = () => {
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/refund-policy" element={<RefundPolicy />} />
                 <Route path="/refund" element={<Navigate to="/refund-policy" replace />} />
-                <Route path="/influencer-promotion-policy" element={<InfluencerPromotionPolicy />} />
                 <Route path="/affiliate" element={<AffiliateInfo />} />
                 <Route path="/cart" element={<CartPage />} />
                 <Route path="/thank-you" element={<ThankYou />} />
@@ -399,17 +310,15 @@ const MainLayout: React.FC = () => {
                   >
                     Quick Google Sign-In
                   </button>
-                  {!(import.meta as any).env?.PROD && (
-                    <button 
-                      onClick={() => {
-                        loginAsDemoStudent();
-                        setAuthModalOpen(false);
-                      }}
-                      className="w-full bg-brand-gold hover:bg-[#ffd34d] text-black py-3 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-colors"
-                    >
-                      Demo Student Bypass (Iframe Safe)
-                    </button>
-                  )}
+                  <button 
+                    onClick={() => {
+                      loginAsDemoStudent();
+                      setAuthModalOpen(false);
+                    }}
+                    className="w-full bg-brand-gold hover:bg-[#ffd34d] text-black py-3 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-colors"
+                  >
+                    Demo Student Bypass (Iframe Safe)
+                  </button>
                 </div>
               )}
 

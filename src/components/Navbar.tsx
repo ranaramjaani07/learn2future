@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { motion } from "motion/react";
 import { 
@@ -16,55 +16,8 @@ import {
 } from "lucide-react";
 
 export const Navbar: React.FC = () => {
-  const location = useLocation();
-  const path = location.pathname;
-
-  // Derive currentPage from active router location path
-  let currentPage = "home";
-  if (path.startsWith("/course/")) {
-    currentPage = "course-details";
-  } else if (path.startsWith("/blog/")) {
-    const slug = path.split("/blog/")[1];
-    if (slug) {
-      currentPage = "blog-details";
-    } else {
-      currentPage = "blog";
-    }
-  } else if (path.startsWith("/student/")) {
-    currentPage = "student-portfolio";
-  } else if (path === "/courses" || path === "/courses/") {
-    currentPage = "courses";
-  } else if (path === "/blogs" || path === "/blogs/" || path === "/blog" || path === "/blog/") {
-    currentPage = "blog";
-  } else if (path === "/about" || path === "/about/") {
-    currentPage = "about";
-  } else if (path === "/contact" || path === "/contact/") {
-    currentPage = "contact";
-  } else if (path === "/terms" || path === "/terms/") {
-    currentPage = "terms";
-  } else if (path === "/privacy" || path === "/privacy/") {
-    currentPage = "privacy";
-  } else if (path === "/refund-policy" || path === "/refund-policy/") {
-    currentPage = "refund-policy";
-  } else if (path === "/affiliate" || path === "/affiliate/") {
-    currentPage = "affiliate";
-  } else if (path === "/cart" || path === "/cart/") {
-    currentPage = "cart";
-  } else if (path === "/thank-you" || path === "/thank-you/") {
-    currentPage = "thank-you";
-  } else if (path === "/my-enrollments" || path === "/my-enrollments/") {
-    currentPage = "my-enrollments";
-  } else if (path === "/admin-login" || path === "/admin-login/") {
-    currentPage = "admin-login";
-  } else if (path === "/admin-dashboard" || path === "/admin-dashboard/") {
-    currentPage = "admin-dashboard";
-  } else if (path === "/onboarding" || path === "/onboarding/") {
-    currentPage = "onboarding";
-  } else if (path === "/student-portfolio" || path === "/student-portfolio/") {
-    currentPage = "student-portfolio";
-  }
-
   const { 
+    currentPage, 
     setCurrentPage, 
     user, 
     isAdmin, 
@@ -74,7 +27,8 @@ export const Navbar: React.FC = () => {
     loginAsDemoStudent,
     loginAsDemoAdmin,
     logout,
-    cart
+    cart,
+    setSelectedStudentUsername
   } = useApp();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -131,6 +85,10 @@ export const Navbar: React.FC = () => {
               id="brand-logo-img" 
               src="/brand_logo.jpg" 
               alt="Learn 2 Future" 
+              width="40"
+              height="40"
+              fetchPriority="high"
+              decoding="sync"
               className="w-10 h-10 rounded-lg border border-brand-gold/50 object-cover group-hover:scale-105 transition-transform shadow-md shadow-brand-gold/10" 
             />
             <div className="flex flex-col">
@@ -202,6 +160,9 @@ export const Navbar: React.FC = () => {
                 <button
                   onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
                   className="flex items-center space-x-1 focus:outline-none"
+                  aria-label="Open profile menu"
+                  aria-expanded={profileDropdownOpen}
+                  aria-haspopup="menu"
                 >
                   {user.photoURL ? (
                     <img
@@ -244,7 +205,8 @@ export const Navbar: React.FC = () => {
                         onClick={() => {
                           setProfileDropdownOpen(false);
                           const slug = user?.displayName?.toLowerCase().replace(/\s+/g, "-") || "new-student";
-                          setCurrentPage("student-portfolio", slug);
+                          setSelectedStudentUsername(slug);
+                          setCurrentPage("student-portfolio" as any);
                         }}
                         className="flex items-center space-x-2 w-full px-3 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-900 rounded-lg transition-colors border-b border-neutral-100 dark:border-neutral-900/40 pb-2 mb-1"
                       >
@@ -308,31 +270,27 @@ export const Navbar: React.FC = () => {
                         </svg>
                         <span>Continue with Google</span>
                       </button>
-                      {!(import.meta as any).env?.PROD && (
-                        <>
-                          <div className="h-px bg-neutral-100 dark:bg-neutral-900 my-1"></div>
-                          <button
-                            onClick={() => {
-                              setLoginDropdownOpen(false);
-                              loginAsDemoStudent();
-                            }}
-                            className="flex items-center space-x-2 w-full px-3 py-2.5 text-xs text-left font-bold text-neutral-900 dark:text-brand-gold hover:bg-neutral-100 dark:hover:bg-neutral-900 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <UserIcon className="w-3.5 h-3.5" />
-                            <span>Demo Student Bypass</span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              setLoginDropdownOpen(false);
-                              loginAsDemoAdmin();
-                            }}
-                            className="flex items-center space-x-2 w-full px-3 py-2.5 text-xs text-left font-semibold text-zinc-500 hover:bg-neutral-100 dark:hover:bg-neutral-900 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <LayoutDashboard className="w-3.5 h-3.5" />
-                            <span>Demo Admin Bypass</span>
-                          </button>
-                        </>
-                      )}
+                      <div className="h-px bg-neutral-100 dark:bg-neutral-900 my-1"></div>
+                      <button
+                        onClick={() => {
+                          setLoginDropdownOpen(false);
+                          loginAsDemoStudent();
+                        }}
+                        className="flex items-center space-x-2 w-full px-3 py-2.5 text-xs text-left font-bold text-neutral-900 dark:text-brand-gold hover:bg-neutral-100 dark:hover:bg-neutral-900 rounded-lg transition-colors cursor-pointer"
+                      >
+                        <UserIcon className="w-3.5 h-3.5" />
+                        <span>Demo Student Bypass</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setLoginDropdownOpen(false);
+                          loginAsDemoAdmin();
+                        }}
+                        className="flex items-center space-x-2 w-full px-3 py-2.5 text-xs text-left font-semibold text-zinc-500 hover:bg-neutral-100 dark:hover:bg-neutral-900 rounded-lg transition-colors cursor-pointer"
+                      >
+                        <LayoutDashboard className="w-3.5 h-3.5" />
+                        <span>Demo Admin Bypass</span>
+                      </button>
                     </div>
                   </div>
                 )}
@@ -367,6 +325,9 @@ export const Navbar: React.FC = () => {
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="p-2 text-neutral-500 dark:text-neutral-400"
+              aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-nav-menu"
             >
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
@@ -447,17 +408,15 @@ export const Navbar: React.FC = () => {
                 >
                   Sign In with Google
                 </button>
-                {!(import.meta as any).env?.PROD && (
-                  <button
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      loginAsDemoStudent();
-                    }}
-                    className="w-full text-center font-display text-sm font-semibold text-black bg-brand-gold px-4 py-3 rounded-lg cursor-pointer"
-                  >
-                    Demo Student Bypass
-                  </button>
-                )}
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    loginAsDemoStudent();
+                  }}
+                  className="w-full text-center font-display text-sm font-semibold text-black bg-brand-gold px-4 py-3 rounded-lg cursor-pointer"
+                >
+                  Demo Student Bypass
+                </button>
               </div>
             )}
           </div>

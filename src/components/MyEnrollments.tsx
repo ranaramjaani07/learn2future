@@ -40,7 +40,6 @@ import { collection, query, where, getDocs, getDoc, doc, setDoc, updateDoc, dele
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "firebase/auth";
 import { db, auth, handleFirestoreError, OperationType } from "../firebase";
 import { Course, Order } from "../types";
-import { compressAndUploadImage } from "../lib/imageUpload";
 
 export const MyEnrollments: React.FC = () => {
   const { 
@@ -113,7 +112,6 @@ export const MyEnrollments: React.FC = () => {
 
   // Profile picture base64 state inside settings
   const [settingsPic, setSettingsPic] = useState<string | null>(null);
-  const [settingsPicFile, setSettingsPicFile] = useState<File | null>(null);
 
   // Settings modification fields state
   const [settingsForm, setSettingsForm] = useState({
@@ -920,13 +918,15 @@ export const MyEnrollments: React.FC = () => {
   const handleSettingsPicUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        setSettingsErrorMsg("Image exceeds maximum 10MB size limit.");
+      if (file.size > 2 * 1024 * 1024) {
+        setSettingsErrorMsg("Image exceeds maximum 2MB size limit.");
         return;
       }
-      setSettingsErrorMsg("");
-      setSettingsPicFile(file);
-      setSettingsPic(URL.createObjectURL(file));
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSettingsPic(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -943,15 +943,6 @@ export const MyEnrollments: React.FC = () => {
 
     setSettingsLoading(true);
     try {
-      let finalPhotoURL = dbUser?.photoURL || "";
-
-      if (settingsPicFile) {
-        // High performance image compression and secure Firebase Storage upload directly
-        finalPhotoURL = await compressAndUploadImage(settingsPicFile, `avatars/${user?.uid || "unidentified"}`);
-      } else if (settingsPic && (settingsPic.startsWith("http://") || settingsPic.startsWith("https://"))) {
-        finalPhotoURL = settingsPic;
-      }
-
       // 1. Update Firestore Profile Doc
       await updateUserProfile({
         fullName: settingsForm.fullName,
@@ -960,7 +951,7 @@ export const MyEnrollments: React.FC = () => {
         city: settingsForm.city,
         state: settingsForm.state,
         country: settingsForm.country,
-        photoURL: finalPhotoURL,
+        photoURL: settingsPic || "",
         youtubeUrl: settingsForm.youtubeUrl,
         instagramUrl: settingsForm.instagramUrl,
         facebookUrl: settingsForm.facebookUrl,
@@ -1141,14 +1132,12 @@ export const MyEnrollments: React.FC = () => {
               <span>Continue with Google</span>
             </button>
 
-            {!(import.meta as any).env?.PROD && (
-              <button
-                onClick={loginAsDemoStudent}
-                className="w-full relative bg-brand-gold text-black font-bold px-6 py-3 rounded-xl transition-all shadow-sm active:scale-95 duration-200 flex items-center justify-center gap-2 text-sm hover:bg-[#F5B300]"
-              >
-                <span>Demo Student Bypass (Iframe Safe)</span>
-              </button>
-            )}
+            <button
+              onClick={loginAsDemoStudent}
+              className="w-full relative bg-brand-gold text-black font-bold px-6 py-3 rounded-xl transition-all shadow-sm active:scale-95 duration-200 flex items-center justify-center gap-2 text-sm hover:bg-[#F5B300]"
+            >
+              <span>Demo Student Bypass (Iframe Safe)</span>
+            </button>
           </div>
 
           <div className="relative flex py-2 items-center">

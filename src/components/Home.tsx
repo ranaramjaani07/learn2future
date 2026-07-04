@@ -240,7 +240,7 @@ export const Home: React.FC = () => {
                     animationPlayState: playState
                   }}
                 >
-                  <img src={imgUrl} referrerPolicy="no-referrer" alt="" className="w-full h-full object-cover select-none pointer-events-none" />
+                  <img src={imgUrl} referrerPolicy="no-referrer" alt="" loading="lazy" decoding="async" className="w-full h-full object-cover select-none pointer-events-none" />
                 </div>
               </div>
             );
@@ -1355,7 +1355,7 @@ export const Home: React.FC = () => {
                   {/* Thumbnail area with Link wrapper */}
                   <Link to={`/course/${course.slug || course.id}`} className="aspect-video w-full overflow-hidden relative bg-neutral-900 shrink-0 block">
                     <img 
-                      src={course.thumbnail} 
+                      src={course.thumbnail} loading="lazy" decoding="async" width="400" height="225" 
                       alt={course.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       onError={(e)=>{
@@ -1521,6 +1521,7 @@ export const Home: React.FC = () => {
                           <div className="flex items-center gap-3">
                             <img 
                               src={item.userPhoto || item.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(item.userName || "Student")}`} 
+                              loading="lazy" decoding="async" width="48" height="48"
                               alt={item.userName}
                               className="w-10 h-10 rounded-full object-cover border border-brand-gold/20 shrink-0"
                               referrerPolicy="no-referrer"
@@ -1628,6 +1629,7 @@ export const Home: React.FC = () => {
                           <div className="flex items-center gap-3">
                             <img 
                               src={item.userPhoto || item.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(item.userName || "Student")}`} 
+                              loading="lazy" decoding="async" width="48" height="48"
                               alt={item.userName}
                               className="w-10 h-10 rounded-full object-cover border border-brand-gold/20 shrink-0"
                               referrerPolicy="no-referrer"
@@ -1934,7 +1936,7 @@ export const Home: React.FC = () => {
                 >
                   <div className="aspect-video w-full overflow-hidden relative bg-neutral-900 shrink-0">
                     <img 
-                      src={post.featuredImage || "https://images.unsplash.com/photo-1516116211223-5c359a36298a?auto=format&fit=crop&q=80&w=800"} 
+                      src={post.featuredImage || "https://images.unsplash.com/photo-1516116211223-5c359a36298a?auto=format&fit=crop&q=80&w=800"} loading="lazy" decoding="async" width="400" height="225" 
                       alt={post.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />

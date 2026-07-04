@@ -1,4 +1,17 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+/* Fonts loaded via <link> in index.html for non-blocking rendering */
+/* font-display: swap ensures text is visible while custom fonts load */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-display: swap;
+}
 @import "tailwindcss";
 
 @variant dark (&:where(.dark, .dark *));

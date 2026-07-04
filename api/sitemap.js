@@ -1,4 +1,4 @@
-import { initializeApp, getApps, getApp } from "firebase/app";
+import { initializeApp } from "firebase/app";
 import { getFirestore, collection, getDocs, query, orderBy } from "firebase/firestore";
 import fs from "fs";
 import path from "path";
@@ -11,7 +11,7 @@ export default async function handler(req, res) {
     }
     const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
     
-    const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+    const app = initializeApp(firebaseConfig);
     const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
     // Resolve sitemap type from query parameter

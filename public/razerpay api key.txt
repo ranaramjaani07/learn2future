@@ -1,6 +1,0 @@
-api key = rzp_live_T5gPqKuOFluQmG
-
-Razorpay Key Secret =  LNEM0vdXBCPqZVTVcb14quOK
-
-
-Razorpay Webhook Secret = Learn2future@2026webhooksecret
