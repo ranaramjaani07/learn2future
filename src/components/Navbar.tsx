@@ -24,8 +24,6 @@ export const Navbar: React.FC = () => {
     isDarkMode, 
     setIsDarkMode, 
     loginWithGoogle, 
-    loginAsDemoStudent,
-    loginAsDemoAdmin,
     logout,
     cart,
     setSelectedStudentUsername
@@ -271,26 +269,6 @@ export const Navbar: React.FC = () => {
                         <span>Continue with Google</span>
                       </button>
                       <div className="h-px bg-neutral-100 dark:bg-neutral-900 my-1"></div>
-                      <button
-                        onClick={() => {
-                          setLoginDropdownOpen(false);
-                          loginAsDemoStudent();
-                        }}
-                        className="flex items-center space-x-2 w-full px-3 py-2.5 text-xs text-left font-bold text-neutral-900 dark:text-brand-gold hover:bg-neutral-100 dark:hover:bg-neutral-900 rounded-lg transition-colors cursor-pointer"
-                      >
-                        <UserIcon className="w-3.5 h-3.5" />
-                        <span>Demo Student Bypass</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setLoginDropdownOpen(false);
-                          loginAsDemoAdmin();
-                        }}
-                        className="flex items-center space-x-2 w-full px-3 py-2.5 text-xs text-left font-semibold text-zinc-500 hover:bg-neutral-100 dark:hover:bg-neutral-900 rounded-lg transition-colors cursor-pointer"
-                      >
-                        <LayoutDashboard className="w-3.5 h-3.5" />
-                        <span>Demo Admin Bypass</span>
-                      </button>
                     </div>
                   </div>
                 )}
@@ -407,15 +385,6 @@ export const Navbar: React.FC = () => {
                   className="w-full text-center font-display text-sm font-semibold text-white bg-neutral-800 dark:bg-neutral-900 px-4 py-3 rounded-lg border border-neutral-700 dark:border-neutral-800 cursor-pointer"
                 >
                   Sign In with Google
-                </button>
-                <button
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    loginAsDemoStudent();
-                  }}
-                  className="w-full text-center font-display text-sm font-semibold text-black bg-brand-gold px-4 py-3 rounded-lg cursor-pointer"
-                >
-                  Demo Student Bypass
                 </button>
               </div>
             )}

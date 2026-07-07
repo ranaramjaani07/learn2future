@@ -1343,12 +1343,12 @@ export const CartPage: React.FC = () => {
                       </div>
                       
                       <div className="border-t border-red-900/40 pt-2.5 mt-1 leading-relaxed space-y-2">
-                        <span className="font-sans font-extrabold text-brand-gold text-[10.5px] uppercase tracking-wider block">💡 Sandbox Iframe / Config Block detected:</span>
+                        <span className="font-sans font-extrabold text-brand-gold text-[10.5px] uppercase tracking-wider block">💡 What to do:</span>
                         <p className="text-[10px] text-neutral-355 leading-relaxed">
-                          Because the application is rendered inside a secure sandboxed iframe or the Razorpay API credentials are not set up in the Admin Settings yet, the automated checkout popup may be blocked.
+                          The payment popup may have been blocked by your browser. Please allow popups for this site and try again, or use the UPI QR option below.
                         </p>
                         <p className="text-[10px] text-brand-gold/90 font-bold">
-                          You can instantly submit your order by using our direct scan-to-pay UPI transfer below!
+                          You can pay instantly using our direct UPI QR below!
                         </p>
                         
                         <div className="pt-1.5 pb-0.5">

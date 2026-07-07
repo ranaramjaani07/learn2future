@@ -4,6 +4,10 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const config = {
   api: {
@@ -12,21 +16,39 @@ export const config = {
 };
 
 function getFirebaseConfig() {
-  if (process.env.FIREBASE_PROJECT_ID) {
-    return {
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      databaseId: process.env.FIREBASE_FIRESTORE_DATABASE_ID || "(default)",
-      apiKey: process.env.FIREBASE_API_KEY || "",
-    };
+  let cfg = {};
+  const searchPaths = [
+    path.join(process.cwd(), "firebase-applet-config.json"),
+    path.join(process.cwd(), "learn2future", "firebase-applet-config.json"),
+    path.join(__dirname, "firebase-applet-config.json"),
+    path.join(__dirname, "../firebase-applet-config.json"),
+    path.join(__dirname, "../../firebase-applet-config.json"),
+    path.join(__dirname, "../../../firebase-applet-config.json")
+  ];
+
+  let loadedPath = "None";
+  for (const p of searchPaths) {
+    try {
+      if (fs.existsSync(p)) {
+        cfg = JSON.parse(fs.readFileSync(p, "utf-8"));
+        loadedPath = p;
+        break;
+      }
+    } catch (_) {}
   }
-  try {
-    const jsonPath = path.join(process.cwd(), "firebase-applet-config.json");
-    if (fs.existsSync(jsonPath)) {
-      const cfg = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
-      return { projectId: cfg.projectId, databaseId: cfg.firestoreDatabaseId || "(default)", apiKey: cfg.apiKey || "" };
-    }
-  } catch (_) {}
-  return { projectId: "", databaseId: "(default)", apiKey: "" };
+
+  const projectId = cfg.projectId || process.env.FIREBASE_PROJECT_ID || "";
+  const databaseId = cfg.firestoreDatabaseId || process.env.FIREBASE_FIRESTORE_DATABASE_ID || "(default)";
+  const apiKey = cfg.apiKey || process.env.FIREBASE_API_KEY || "";
+
+  console.log(`[FIREBASE-CONFIG-DIAGNOSTICS] Loaded config from path: ${loadedPath}`);
+  console.log(`[FIREBASE-CONFIG-DIAGNOSTICS] Project: ${projectId || "MISSING"}, Database: ${databaseId}, API Key Present: ${!!apiKey}`);
+
+  return {
+    projectId,
+    databaseId,
+    apiKey,
+  };
 }
 
 const fbConfig = getFirebaseConfig();

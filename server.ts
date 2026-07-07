@@ -1,3 +1,6 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import express from "express";
 import path from "path";
 import fs from "fs";
@@ -817,19 +820,33 @@ async function fetchLatestTrackingSettings(): Promise<TrackingSettings> {
 
 async function fetchLatestPaymentSettings(): Promise<PaymentGatewaySettings> {
   const now = Date.now();
-  if (isServerQuotaExceeded || (now - lastPaymentFetchTime < SETTINGS_CACHE_TTL)) {
+  if (isServerQuotaExceeded || (now - lastPaymentFetchTime < 2000)) {
     return currentPaymentSettings;
   }
   try {
     const docSnap = await adminDb.collection("settings").doc("paymentGateway").get();
     if (docSnap.exists) {
       const data = docSnap.data();
-      const rawKeyId = data?.razorpayKeyId || process.env.RAZORPAY_KEY_ID || "";
+      
+      const dbKeyId = data?.razorpayKeyId || "";
+      const dbKeySecret = data?.razorpayKeySecret || "";
+      
+      const envKeyId = process.env.RAZORPAY_KEY_ID || "";
+      const envKeySecret = process.env.RAZORPAY_KEY_SECRET || "";
+
+      const isDbPlaceholder = !dbKeyId || dbKeyId === DEFAULT_RAZORPAY_KEY_ID;
+      const isEnvPlaceholder = !envKeyId || envKeyId === DEFAULT_RAZORPAY_KEY_ID;
+
+      // Prioritize custom non-placeholder credentials from env vars over placeholder keys from database
+      const useEnv = (!isEnvPlaceholder && isDbPlaceholder);
+
+      const rawKeyId = useEnv ? envKeyId : (dbKeyId || envKeyId || "");
+      const rawKeySecret = useEnv ? envKeySecret : (dbKeySecret || envKeySecret || "");
       const normalizedKeyId = normalizeRazorpayKeyId(rawKeyId);
       
       currentPaymentSettings = {
         razorpayKeyId: normalizedKeyId || DEFAULT_RAZORPAY_KEY_ID,
-        razorpayKeySecret: data?.razorpayKeySecret || process.env.RAZORPAY_KEY_SECRET || DEFAULT_RAZORPAY_KEY_SECRET,
+        razorpayKeySecret: rawKeySecret || DEFAULT_RAZORPAY_KEY_SECRET,
         razorpayWebhookSecret: data?.razorpayWebhookSecret || process.env.RAZORPAY_WEBHOOK_SECRET || "",
         isTestMode: data?.isTestMode !== undefined ? data.isTestMode !== false : (process.env.PAYMENT_ENV !== "PRODUCTION"),
         isLiveMode: data?.isLiveMode !== undefined ? !!data.isLiveMode : (process.env.PAYMENT_ENV === "PRODUCTION"),
@@ -2431,6 +2448,33 @@ Do not include any raw markdown formatting like \`\`\`json or trailing whitespac
     }
   });
 
+  async function checkIsAdminUser(userId: string, email?: string): Promise<boolean> {
+    if (email && email.toLowerCase() === "digitalcoursesbay@gmail.com") {
+      return true;
+    }
+    if (userId) {
+      try {
+        const adminDoc = await adminDb.collection("admins").doc(userId).get();
+        if (adminDoc.exists) {
+          return true;
+        }
+      } catch (e) {
+        console.warn("[ADMIN-CHECK] Failed to read from admins collection:", e);
+      }
+    }
+    if (email) {
+      try {
+        const emailDoc = await adminDb.collection("adminUsers").doc(email.toLowerCase()).get();
+        if (emailDoc.exists && emailDoc.data()?.role === "admin") {
+          return true;
+        }
+      } catch (e) {
+        console.warn("[ADMIN-CHECK] Failed to read from adminUsers collection:", e);
+      }
+    }
+    return false;
+  }
+
   app.post("/api/pay/create-order", async (req, res) => {
     try {
       const { courseId, amount, userId, buyerName, email, telegram, couponCode, cartItems } = req.body;
@@ -2455,15 +2499,20 @@ Do not include any raw markdown formatting like \`\`\`json or trailing whitespac
       const isPlaceholderKeys = 
         settings.razorpayKeyId === DEFAULT_RAZORPAY_KEY_ID;
 
-      // Sandbox simulation bypass is ONLY allowed when using the default/placeholder keys,
-      // sandbox mode is explicitly enabled in settings, and running inside the AI Studio preview environment. 
-      // If the administrator has configured custom/personal Razorpay API keys or disabled sandbox,
-      // sandbox bypass must be strictly disabled to protect course inventory.
-      const isSandboxAllowed = isPlaceholderKeys && settings.enablePaymentSandbox === true && getIsAiStudioPreview(req);
+      const isAdmin = await checkIsAdminUser(userId, email || "");
+      const isTestModeActive = settings.isTestMode === true || settings.enablePaymentSandbox === true;
 
-      if (isPlaceholderKeys && !isSandboxAllowed) {
+      // Sandbox simulation bypass is ONLY allowed when:
+      // 1. The user is verified as an administrator (student sandbox bypass is strictly prohibited)
+      // 2. Sandbox/test mode is enabled in the gateway settings
+      // 3. For placeholder keys, we must also be running in the preview environment
+      const isSandboxAllowed = isPlaceholderKeys 
+        ? (settings.enablePaymentSandbox === true && getIsAiStudioPreview(req) && isAdmin)
+        : (isTestModeActive && isAdmin);
+
+      if (isPlaceholderKeys && !isAdmin) {
         return res.status(400).json({
-          error: "Sandbox Simulation is disabled in active environment. Real payment key_id & key_secret are required for production transactions."
+          error: "The payment gateway is currently in test mode. Real purchases are temporarily disabled."
         });
       }
 
@@ -2471,8 +2520,10 @@ Do not include any raw markdown formatting like \`\`\`json or trailing whitespac
       let isSimulated = false;
 
       try {
-        if (isPlaceholderKeys) {
-          console.log("[CHECKOUT] Default test/placeholder key active. Forcing local sandbox simulator.");
+        const shouldSimulate = isSandboxAllowed && (isPlaceholderKeys || isTestModeActive);
+
+        if (shouldSimulate) {
+          console.log("[CHECKOUT] Sandbox order active for admin testing.");
           throw new Error("Sandbox Simulation Required");
         }
 
@@ -2569,12 +2620,12 @@ Do not include any raw markdown formatting like \`\`\`json or trailing whitespac
       const isSimulatedOrder = razorpay_order_id.startsWith("order_sim_") || razorpay_signature === "simulated_bypass_sig";
 
       const isProduction = getIsProduction(req);
-      let isSandboxAllowed = isPlaceholderKeys && !isProduction && settings.enablePaymentSandbox === true;
+      const isAdmin = await checkIsAdminUser(userId, email || "");
+      const isTestModeActive = settings.isTestMode === true || settings.enablePaymentSandbox === true;
 
-      // In the AI Studio preview environment with placeholder keys, respect settings.enablePaymentSandbox
-      if (getIsAiStudioPreview(req) && isPlaceholderKeys) {
-        isSandboxAllowed = settings.enablePaymentSandbox === true;
-      }
+      const isSandboxAllowed = isPlaceholderKeys 
+        ? (settings.enablePaymentSandbox === true && getIsAiStudioPreview(req) && isAdmin)
+        : (isTestModeActive && isAdmin);
 
       if (isSimulatedOrder && !isSandboxAllowed) {
         console.error("[SECURITY-ALERT] Attempted simulated bypass of checkout verification in active environment.");

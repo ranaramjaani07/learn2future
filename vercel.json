@@ -110,13 +110,16 @@
   ],
   "functions": {
     "api/pay/create-order.js": {
-      "maxDuration": 30
+      "maxDuration": 30,
+      "includeFiles": "firebase-applet-config.json"
     },
     "api/pay/verify-payment.js": {
-      "maxDuration": 30
+      "maxDuration": 30,
+      "includeFiles": "firebase-applet-config.json"
     },
     "api/pay/webhook.js": {
-      "maxDuration": 30
+      "maxDuration": 30,
+      "includeFiles": "firebase-applet-config.json"
     },
     "api/sitemap.js": {
       "maxDuration": 30

@@ -32,7 +32,6 @@ export const Courses: React.FC = () => {
   const { 
     user, 
     loginWithGoogle, 
-    loginAsDemoStudent,
     globalSettings, 
     logUserActivity, 
     addToCart, 
@@ -1136,14 +1135,6 @@ ${course.title}
                           className="bg-brand-gold text-black font-display font-semibold text-xs py-2.5 px-4 rounded-xl hover:bg-gold transition-colors w-full disabled:opacity-50"
                         >
                           {loggingIn ? "Connecting Google..." : "Sign In & Progress"}
-                        </button>
-                        <button
-                          onClick={() => {
-                            loginAsDemoStudent();
-                          }}
-                          className="bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 font-display font-semibold text-xs py-2.5 px-4 rounded-xl transition-colors w-full"
-                        >
-                          Demo Student Bypass (Iframe Safe)
                         </button>
                       </div>
                       {loginError && (

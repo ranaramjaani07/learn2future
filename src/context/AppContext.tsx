@@ -107,8 +107,6 @@ interface AppContextType {
   sendVerificationEmail: () => Promise<void>;
   logout: () => Promise<void>;
   checkAdminPrivilege: (currentUser: FirebaseUser | null) => Promise<boolean>;
-  loginAsDemoAdmin: () => void;
-  loginAsDemoStudent: () => void;
   globalSettings: GlobalSettings;
   updateGlobalSettings: (newSettings: GlobalSettings) => Promise<void>;
   authError: string | null;
@@ -248,18 +246,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    if (user.uid === "demo_admin_uid") {
-      try {
-        const local = localStorage.getItem("demo_orders");
-        if (local) {
-          const list = JSON.parse(local) as any[];
-          setOrders(list.filter((o: any) => o.email === user.email));
-        } else {
-          setOrders([]);
-        }
-      } catch (_) {}
-      return;
-    }
 
     let cancelled = false;
 
@@ -801,17 +787,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    if (user.uid === "demo_admin_uid" || user.uid === "demo_student_uid") {
-      try {
-        const local = localStorage.getItem("demo_cart");
-        if (local) {
-          setCart(JSON.parse(local));
-        } else {
-          setCart([]);
-        }
-      } catch (_) {}
-      return;
-    }
 
     // ── FIXED: One-time getDocs instead of persistent onSnapshot ──
     let cancelled = false;
@@ -872,38 +847,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     //   return false;
     // }
 
-    if (user.uid === "demo_admin_uid" || user.uid === "demo_student_uid") {
-      const existingItem = cart.find(item => item.productId === course.id);
-      let updatedCart: any[] = [];
-      if (existingItem) {
-        updatedCart = cart.map(item =>
-          item.productId === course.id
-            ? { ...item, quantity: (item.quantity || 1) + 1 }
-            : item
-        );
-        showToast("Product already added to cart.", "info");
-      } else {
-        const newItem = {
-          id: "cart_sim_" + Date.now().toString(),
-          userId: user.uid,
-          userEmail: user.email || "",
-          productId: course.id,
-          productTitle: course.title,
-          productCategory: course.category || "General",
-          productImage: course.thumbnail || "",
-          price: Number(course.price || 0),
-          quantity: 1,
-          addedAt: new Date()
-        };
-        updatedCart = [...cart, newItem];
-        showToast("Added to cart successfully", "success");
-      }
-      setCart(updatedCart);
-      localStorage.setItem("demo_cart", JSON.stringify(updatedCart));
-      // Log User Activities (View, Add to Cart)
-      await logUserActivity("Add To Cart", `Added To Cart: ${course.title} (₹${course.price})`);
-      return true;
-    }
 
     try {
       const existingItem = cart.find(item => item.productId === course.id);
@@ -955,16 +898,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const removeFromCart = async (cartItemId: string) => {
     if (!user) return;
 
-    if (user.uid === "demo_admin_uid" || user.uid === "demo_student_uid") {
-      const item = cart.find(x => x.id === cartItemId);
-      if (item) {
-        await logUserActivity("Remove From Cart", `Removed From Cart: ${item.productTitle}`);
-      }
-      const updatedCart = cart.filter(x => x.id !== cartItemId);
-      setCart(updatedCart);
-      localStorage.setItem("demo_cart", JSON.stringify(updatedCart));
-      return;
-    }
 
     try {
       const item = cart.find(x => x.id === cartItemId);
@@ -986,14 +919,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    if (user.uid === "demo_admin_uid" || user.uid === "demo_student_uid") {
-      const updatedCart = cart.map(item =>
-        item.id === cartItemId ? { ...item, quantity: Number(quantity) } : item
-      );
-      setCart(updatedCart);
-      localStorage.setItem("demo_cart", JSON.stringify(updatedCart));
-      return;
-    }
 
     try {
       await setDoc(doc(db, "cartItems", cartItemId), {
@@ -1008,11 +933,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const clearCart = async () => {
     if (!user) return;
 
-    if (user.uid === "demo_admin_uid" || user.uid === "demo_student_uid") {
-      setCart([]);
-      localStorage.removeItem("demo_cart");
-      return;
-    }
+
 
     try {
       for (const item of cart) {
@@ -1024,68 +945,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const loginAsDemoAdmin = () => {
-    const pin = prompt("Enter Developer Security PIN to bypass Google Authentication (Use 'admin' to bypass in development/sandbox):");
-    if (pin === "L2F-SAFE-2026" || pin === "admin") {
-      const mockUser = {
-        uid: "demo_admin_uid",
-        email: "digitalcoursesbay@gmail.com",
-        displayName: "Demo Admin",
-        emailVerified: true
-      } as any as FirebaseUser;
-      setUser(mockUser);
-
-      const mockDbUser = {
-        uid: "demo_admin_uid",
-        fullName: "Demo Admin",
-        email: "digitalcoursesbay@gmail.com",
-        mobile: "+1-555-0100",
-        onboardingCompleted: true,
-        address: "1600 Amphitheatre Pkwy",
-        city: "Mountain View",
-        state: "CA",
-        country: "USA",
-        createdAt: new Date(),
-        updatedAt: new Date()
-      } as any as DbUser;
-      setDbUser(mockDbUser);
-
-      setIsAdmin(true);
-      setCurrentPage("admin-dashboard");
-      showToast("Access Granted: Developer Bypass Active", "success");
-    } else {
-      showToast("Unauthorized Bypass Attempt Blocked", "error");
-    }
-  };
-
-  const loginAsDemoStudent = () => {
-    const mockUser = {
-      uid: "demo_student_uid",
-      email: "digitalcoursesbay@gmail.com",
-      displayName: "Demo Student",
-      emailVerified: true
-    } as any as FirebaseUser;
-    setUser(mockUser);
-
-    const mockDbUser = {
-      uid: "demo_student_uid",
-      fullName: "Demo Student",
-      email: "digitalcoursesbay@gmail.com",
-      mobile: "+1-555-0199",
-      onboardingCompleted: true,
-      address: "123 Learning Lane",
-      city: "Silicon Valley",
-      state: "CA",
-      country: "USA",
-      createdAt: new Date(),
-      updatedAt: new Date()
-    } as any as DbUser;
-    setDbUser(mockDbUser);
-
-    setIsAdmin(false);
-    setCurrentPage("my-enrollments");
-    showToast("Access Granted: Demo Student Bypass Active", "success");
-  };
 
   const logout = async () => {
     try {
@@ -1093,7 +952,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await logUserActivity("Logout", "Signed out of website portal");
       }
       // Only call signOut if we aren't using a mock user session
-      if (user?.uid !== "demo_admin_uid" && user?.uid !== "demo_student_uid") {
+      if (true) {
         await signOut(auth);
       }
       setDbUser(null);
@@ -1125,8 +984,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         sendVerificationEmail,
         logout,
         checkAdminPrivilege,
-        loginAsDemoAdmin,
-        loginAsDemoStudent,
         globalSettings,
         updateGlobalSettings,
         authError,

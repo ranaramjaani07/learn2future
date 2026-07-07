@@ -473,7 +473,6 @@ export const AdminDashboard: React.FC = () => {
       showToast("Error: Selected file is not a supported image.");
       return;
     }
-
     const maxBytes = 2 * 1024 * 1024; // 2MB
     if (file.size > maxBytes) {
       showToast("File is too large (max 2MB).");
@@ -493,7 +492,7 @@ export const AdminDashboard: React.FC = () => {
           else if (cardIndex === 3) setHpOrbitImage3(compressed);
           else if (cardIndex === 4) setHpOrbitImage4(compressed);
 
-          if (user && user.uid !== "demo_admin_uid") {
+          if (user) {
             const timestamp = Date.now();
             const cleanFileName = file.name.replace(/[^a-zA-Z0-9]/g, "_");
             const storageRef = ref(storage, `hero_orbit/course_card_${cardIndex}_${timestamp}_${cleanFileName}.${fileExt}`);
@@ -685,7 +684,7 @@ export const AdminDashboard: React.FC = () => {
           setUpiQrCode(compressed);
 
           // If real logged in admin and Firebase storage is active, upload to cloud
-          if (user && user.uid !== "demo_admin_uid") {
+          if (user) {
             setUploadingQrCode(true);
             setQrCodeProgress(0);
             try {
@@ -773,7 +772,7 @@ export const AdminDashboard: React.FC = () => {
           const compressed = await compressImage(rawBase64, 500, 500, 0.85);
           setBrandLogoUrl(compressed);
 
-          if (user && user.uid !== "demo_admin_uid") {
+          if (user) {
             setUploadingBrandLogo(true);
             setBrandLogoProgress(0);
             try {
@@ -836,7 +835,7 @@ export const AdminDashboard: React.FC = () => {
           const compressed = await compressImage(rawBase64, 1200, 630, 0.85);
           setOgDefaultImageUrl(compressed);
 
-          if (user && user.uid !== "demo_admin_uid") {
+          if (user) {
             setUploadingOgImage(true);
             setOgImageProgress(0);
             try {
@@ -899,7 +898,7 @@ export const AdminDashboard: React.FC = () => {
           const compressed = await compressImage(rawBase64, 1200, 630, 0.85);
           setTwitterPreviewImageUrl(compressed);
 
-          if (user && user.uid !== "demo_admin_uid") {
+          if (user) {
             setUploadingTwitterImage(true);
             setTwitterImageProgress(0);
             try {
@@ -1390,133 +1389,7 @@ export const AdminDashboard: React.FC = () => {
   const fetchAllAdminData = async () => {
     setLoading(true);
 
-    if (user?.uid === "demo_admin_uid") {
-      let storedCourses = localStorage.getItem("demo_courses");
-      let storedOrders = localStorage.getItem("demo_orders");
-      let storedContacts = localStorage.getItem("demo_contacts");
 
-      let currentCourses = fallbackCourses;
-      if (storedCourses) {
-        try {
-          const parsed = JSON.parse(storedCourses);
-          currentCourses = parsed.map((c: any) => ({
-            ...c,
-            createdAt: c.createdAt ? new Date(c.createdAt) : new Date()
-          }));
-        } catch (_) {
-          currentCourses = fallbackCourses;
-        }
-      } else {
-        localStorage.setItem("demo_courses", JSON.stringify(fallbackCourses));
-      }
-
-      let currentOrders = fallbackOrders;
-      if (storedOrders) {
-        try {
-          const parsed = JSON.parse(storedOrders);
-          currentOrders = parsed.map((o: any) => ({
-            ...o,
-            createdAt: o.createdAt ? new Date(o.createdAt) : new Date()
-          }));
-        } catch (_) {
-          currentOrders = fallbackOrders;
-        }
-      } else {
-        localStorage.setItem("demo_orders", JSON.stringify(fallbackOrders));
-      }
-
-      let currentContacts = fallbackContacts;
-      if (storedContacts) {
-        try {
-          const parsed = JSON.parse(storedContacts);
-          currentContacts = parsed.map((m: any) => ({
-            ...m,
-            createdAt: m.createdAt ? new Date(m.createdAt) : new Date()
-          }));
-        } catch (_) {
-          currentContacts = fallbackContacts;
-        }
-      } else {
-        localStorage.setItem("demo_contacts", JSON.stringify(fallbackContacts));
-      }
-
-      let storedSettings = localStorage.getItem("demo_tracking_settings");
-      if (storedSettings) {
-        try {
-          const parsed = JSON.parse(storedSettings);
-          setMetaPixelId(parsed.metaPixelId || "");
-          setGtmId(parsed.gtmId || "");
-          setGa4Id(parsed.ga4Id || "");
-          setSearchConsoleVerification(parsed.searchConsoleVerification || "");
-          setFacebookDomainVerification(parsed.facebookDomainVerification || "xb9keiie8xdt56l5vy9ozx18inhepe");
-        } catch (_) {}
-      } else {
-        setMetaPixelId("");
-        setGtmId("");
-        setGa4Id("");
-        setSearchConsoleVerification("");
-        setFacebookDomainVerification("xb9keiie8xdt56l5vy9ozx18inhepe");
-      }
-
-      let storedUsers = localStorage.getItem("demo_users");
-      let currentUsers = fallbackUsers;
-      if (storedUsers) {
-        try {
-          const parsed = JSON.parse(storedUsers);
-          currentUsers = parsed.map((usr: any) => ({
-            ...usr,
-            createdAt: usr.createdAt ? new Date(usr.createdAt) : new Date()
-          }));
-        } catch (_) {
-          currentUsers = fallbackUsers;
-        }
-      } else {
-        localStorage.setItem("demo_users", JSON.stringify(fallbackUsers));
-      }
-
-      let storedShares = localStorage.getItem("demo_shares");
-      let currentShares = [];
-      if (storedShares) {
-        try {
-          currentShares = JSON.parse(storedShares);
-        } catch (_) {}
-      } else {
-        currentShares = [
-          { id: "s1", courseId: "master-time-management", courseName: "Master Time Management", userId: "student123", platform: "whatsapp", shareUrl: "https://learn2future.com/course/master-time-management?ref=student123", createdAt: new Date() },
-          { id: "s2", courseId: "master-time-management", courseName: "Master Time Management", userId: "student123", platform: "telegram", shareUrl: "https://learn2future.com/course/master-time-management?ref=student123", createdAt: new Date() },
-          { id: "s3", courseId: "dark-psychology", courseName: "Dark Psychology", userId: "student456", platform: "copylink", shareUrl: "https://learn2future.com/course/dark-psychology?ref=student456", createdAt: new Date() },
-          { id: "s4", courseId: "public-speaking", courseName: "Public Speaking", userId: "student789", platform: "facebook", shareUrl: "https://learn2future.com/course/public-speaking?ref=student789", createdAt: new Date() },
-          { id: "s5", courseId: "public-speaking", courseName: "Public Speaking", userId: "student123", platform: "twitter", shareUrl: "https://learn2future.com/course/public-speaking?ref=student123", createdAt: new Date() },
-          { id: "s6", courseId: "dark-psychology", courseName: "Dark Psychology", userId: "student123", platform: "linkedin", shareUrl: "https://learn2future.com/course/dark-psychology?ref=student123", createdAt: new Date() },
-        ];
-        localStorage.setItem("demo_shares", JSON.stringify(currentShares));
-      }
-      setCourseSharesList(currentShares);
-
-      let storedReferrals = localStorage.getItem("demo_referrals");
-      let currentReferrals = [];
-      if (storedReferrals) {
-        try {
-          currentReferrals = JSON.parse(storedReferrals);
-        } catch (_) {}
-      } else {
-        currentReferrals = [
-          { id: "r1", courseId: "master-time-management", courseName: "Master Time Management", referrerId: "student123", clickedUserId: "clicker1", createdAt: new Date() },
-          { id: "r2", courseId: "master-time-management", courseName: "Master Time Management", referrerId: "student123", clickedUserId: "clicker2", createdAt: new Date() },
-          { id: "r3", courseId: "dark-psychology", courseName: "Dark Psychology", referrerId: "student456", clickedUserId: "clicker3", createdAt: new Date() },
-          { id: "r4", courseId: "public-speaking", courseName: "Public Speaking", referrerId: "student789", clickedUserId: "clicker4", createdAt: new Date() },
-        ];
-        localStorage.setItem("demo_referrals", JSON.stringify(currentReferrals));
-      }
-      setCourseReferralsList(currentReferrals);
-
-      setCourses(currentCourses);
-      setOrders(currentOrders);
-      setContactMsgs(currentContacts);
-      setUsersList(currentUsers);
-      setLoading(false);
-      return;
-    }
 
     try {
       // Fetch Users
@@ -1637,23 +1510,12 @@ export const AdminDashboard: React.FC = () => {
         setIsLiveMode(!!data.isLiveMode);
         setEnablePaymentSandbox(data.enablePaymentSandbox !== false);
       } else {
-        const stored = localStorage.getItem("demo_payment_settings");
-        if (stored) {
-          const data = JSON.parse(stored);
-          setRazorpayKeyId(normalizeLocalKey(data.razorpayKeyId || ""));
-          setRazorpayKeySecret(data.razorpayKeySecret || "");
-          setRazorpayWebhookSecret(data.razorpayWebhookSecret || "");
-          setIsTestMode(data.isTestMode !== false);
-          setIsLiveMode(!!data.isLiveMode);
-          setEnablePaymentSandbox(data.enablePaymentSandbox !== false);
-        } else {
           setRazorpayKeyId("");
           setRazorpayKeySecret("");
           setRazorpayWebhookSecret("");
-          setIsTestMode(true);
-          setIsLiveMode(false);
-          setEnablePaymentSandbox(true);
-        }
+          setIsTestMode(false);
+          setIsLiveMode(true);
+          setEnablePaymentSandbox(false);
       }
     } catch (e) {
       console.warn("Administrative fetch payment gateway settings error:", e);
@@ -1837,20 +1699,6 @@ export const AdminDashboard: React.FC = () => {
   // Avoid long-lived active realtime Firestore listener channels in production (saves 99% reads)
   useEffect(() => {
     if (!isAdmin) return;
-
-    if (user?.uid === "demo_admin_uid") {
-      // In demo mode, load local simulated collections for courses, orders, and contact tickets
-      const storedCourses = localStorage.getItem("demo_courses");
-      const storedOrders = localStorage.getItem("demo_orders");
-      const storedContacts = localStorage.getItem("demo_contacts");
-      const storedBlogs = localStorage.getItem("demo_blogs");
-
-      setCourses(storedCourses ? JSON.parse(storedCourses) : fallbackCourses);
-      setOrders(storedOrders ? JSON.parse(storedOrders) : fallbackOrders);
-      setContactMsgs(storedContacts ? JSON.parse(storedContacts) : fallbackContacts);
-      setBlogsList(storedBlogs ? JSON.parse(storedBlogs) : []);
-      setLoadingBlogs(false);
-    }
   }, [isAdmin, user?.uid]);
 
   // Helper to compress images on client side to prevent excessively large payload writes
@@ -1949,7 +1797,7 @@ export const AdminDashboard: React.FC = () => {
             const compressed = await compressImage(rawBase64, 800, 800, 0.75);
             setCourseThumbnail(compressed);
             
-            if (user && user.uid !== "demo_admin_uid") {
+            if (user) {
               const timestamp = Date.now();
               const cleanFileName = file.name.replace(/[^a-zA-Z0-9]/g, "_");
               const extension = fileExt === "png" ? "png" : "jpg";
@@ -2119,112 +1967,6 @@ export const AdminDashboard: React.FC = () => {
     const cleanSlug = courseSlug.trim()
       ? courseSlug.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-_]/g, "")
       : courseTitle.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-_]/g, "");
-
-    if (user?.uid === "demo_admin_uid") {
-      try {
-        let storedCourses = localStorage.getItem("demo_courses");
-        let currentCourses: Course[] = storedCourses ? JSON.parse(storedCourses) : [];
-        
-        const courseId = editingCourse?.id || "course_" + Date.now();
-        const coursePayload: Course = {
-          id: courseId,
-          title: courseTitle,
-          category: courseCategory,
-          price: Number(coursePrice),
-          description: courseDescription,
-          thumbnail: courseThumbnail,
-          slug: cleanSlug,
-          deliverableLink: courseDeliverableLink,
-          welcomeVideoUrl: courseWelcomeVideoUrl,
-          deliveryInstructions: courseDeliveryInstructions,
-          deliveryUrl: courseDeliveryUrl,
-          createdAt: editingCourse?.createdAt ? new Date(editingCourse.createdAt) : new Date(),
-
-          instructorName: courseInstructorName || "Aditya Raj Kashyap",
-          subCategory: courseSubCategory || courseCategory || "",
-          courseStatus: courseStatus || "Published",
-          isFeatured: courseIsFeatured,
-          isPopular: courseIsPopular,
-          isTrending: courseIsTrending,
-
-          originalPrice: Number(courseOriginalPrice) || Math.round(Number(coursePrice) * 2.2),
-          discountPercentage: Number(courseDiscountPercentage) || 0,
-          currency: courseCurrency || "INR",
-          isLimitedTimeOffer: courseIsLimitedTimeOffer,
-
-          bannerImage: courseBannerImage || "",
-          instructorImage: courseInstructorImage || "",
-          previewVideoUrl: coursePreviewVideoUrl || "",
-          shortDescription: courseShortDescription || courseDescription || "",
-          longDescription: courseLongDescription || courseDescription || "",
-          courseOverview: courseOverview || "",
-          courseSummary: courseSummary || "",
-          whoIsThisCourseFor: courseWhoIsThisCourseFor || "",
-          prerequisites: coursePrerequisites || "",
-
-          courseDuration: courseDuration || "10+ Hours of on-demand sessions",
-          videoHours: courseVideoHours || "10",
-          numberOfLessons: Number(courseNumberOfLessons) || 28,
-          numberOfModules: Number(courseNumberOfModules) || 5,
-          assignmentsCount: Number(courseAssignmentsCount) || 0,
-          projectsCount: Number(courseProjectsCount) || 0,
-          quizCount: Number(courseQuizCount) || 0,
-          language: courseLanguage || "English / Bilingual",
-          skillLevel: courseSkillLevel || "All Professional Levels",
-          certificateAvailable: courseCertificateAvailable,
-          lifetimeAccess: courseLifetimeAccess,
-          mobileAccess: courseMobileAccess,
-          downloadableResources: courseDownloadableResources,
-
-          modules: courseModules || [],
-          faqItems: courseFaqItems || [],
-
-          seoTitle: courseSeoTitle || "",
-          seoDescription: courseSeoDescription || "",
-          focusKeyword: courseFocusKeyword || "",
-          secondaryKeywords: courseSecondaryKeywords || [],
-          courseTags: courseTags || [],
-          canonicalUrl: courseCanonicalUrl || "",
-          ogTitle: courseOgTitle || "",
-          ogDescription: courseOgDescription || "",
-          twitterTitle: courseTwitterTitle || "",
-          twitterDescription: courseTwitterDescription || "",
-          schemaDescription: courseSchemaDescription || "",
-
-          benefits: courseBenefits || [],
-          learningOutcomes: courseLearningOutcomes || [],
-          requirements: courseRequirements || [],
-          toolsNeeded: courseToolsNeeded || [],
-          bonusResources: courseBonusResources || [],
-
-          googleDriveLink: courseGoogleDriveLink || "",
-          telegramLink: courseTelegramLink || "",
-          privateResourceLink: coursePrivateResourceLink || "",
-          importantNotes: courseImportantNotes || ""
-        };
-
-        if (editingCourse && editingCourse.id) {
-          currentCourses = currentCourses.map(c => c.id === editingCourse.id ? coursePayload : c);
-          showToast("Course profile updated successfully (Demo Mode)");
-        } else {
-          currentCourses.unshift(coursePayload);
-          showToast("Course syllabus added successfully (Demo Mode)");
-        }
-
-        localStorage.setItem("demo_courses", JSON.stringify(currentCourses));
-
-        // Close and reset
-        setShowCourseModal(false);
-        resetCourseFormState();
-
-        await fetchAllAdminData();
-      } catch (err) {
-        console.error("Local save course failure:", err);
-      } finally {
-        setUploadProgress(false);
-      }
-      return;
-    }
 
     const pathString = "courses";
     try {
@@ -2436,20 +2178,6 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const executeDeleteCourse = async (courseId: string) => {
-    if (user?.uid === "demo_admin_uid") {
-      try {
-        let storedCourses = localStorage.getItem("demo_courses");
-        let currentCourses: Course[] = storedCourses ? JSON.parse(storedCourses) : [];
-        currentCourses = currentCourses.filter(c => c.id !== courseId);
-        localStorage.setItem("demo_courses", JSON.stringify(currentCourses));
-        showToast("Course removed from catalog (Demo Mode)");
-        await fetchAllAdminData();
-      } catch (err) {
-        console.error("Local delete course failure:", err);
-      }
-      return;
-    }
-
     const pathString = "courses";
     try {
       await deleteDoc(doc(db, pathString, courseId));
@@ -2480,13 +2208,6 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const executeDeleteAllCourses = async () => {
-    if (user?.uid === "demo_admin_uid") {
-      localStorage.setItem("demo_courses", JSON.stringify([]));
-      showToast("All courses cleared (Demo Mode)");
-      await fetchAllAdminData();
-      return;
-    }
-
     const pathString = "courses";
     try {
       showToast("Wiping courses catalog...");
@@ -2503,38 +2224,6 @@ export const AdminDashboard: React.FC = () => {
 
   // Firebase update function: updateOrderStatus(orderId, newStatus)
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
-    if (user?.uid === "demo_admin_uid") {
-      try {
-        let storedOrders = localStorage.getItem("demo_orders");
-        let currentOrders: Order[] = storedOrders ? JSON.parse(storedOrders) : [];
-        currentOrders = currentOrders.map(o => {
-          if (o.id === orderId) {
-            const updated: any = { ...o, status: newStatus };
-            if (newStatus === "Verified" || newStatus === "approved" || newStatus === "Approved") {
-              updated.purchasedAt = new Date();
-              updated.status = "approved"; // standardizing on requested value
-            } else if (newStatus === "Delivered" || newStatus === "delivered") {
-              updated.deliveredAt = new Date();
-              updated.status = "delivered"; // standardizing on requested value
-              if (!o.purchasedAt) {
-                updated.purchasedAt = new Date();
-              }
-            } else if (newStatus === "Pending" || newStatus === "pending") {
-              updated.status = "pending";
-            }
-            return updated;
-          }
-          return o;
-        });
-        localStorage.setItem("demo_orders", JSON.stringify(currentOrders));
-        await fetchAllAdminData();
-        showToast(`Order status transitioned to ${newStatus}`);
-      } catch (err) {
-        console.error("Local update order status error:", err);
-      }
-      return;
-    }
-
     const pathString = "orders";
     try {
       const docRef = doc(db, pathString, orderId);
@@ -2763,13 +2452,6 @@ export const AdminDashboard: React.FC = () => {
       onConfirm: async () => {
         showToast("Deleting all orders and user enrollments...");
         try {
-          if (user?.uid === "demo_admin_uid") {
-            localStorage.setItem("demo_orders", JSON.stringify([]));
-            await fetchAllAdminData();
-            showToast("Successfully cleared all mock orders!");
-            setConfirmModal(null);
-            return;
-          }
           // Real Firebase Delete
           const deletePromises = orders.map(async (o) => {
             // Delete associated userPurchases
@@ -2797,19 +2479,6 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const executeDeleteOrder = async (orderId: string) => {
-    if (user?.uid === "demo_admin_uid") {
-      try {
-        let storedOrders = localStorage.getItem("demo_orders");
-        let currentOrders: Order[] = storedOrders ? JSON.parse(storedOrders) : [];
-        currentOrders = currentOrders.filter(o => o.id !== orderId);
-        localStorage.setItem("demo_orders", JSON.stringify(currentOrders));
-        await fetchAllAdminData();
-      } catch (err) {
-        console.error("Local delete order failure:", err);
-      }
-      return;
-    }
-
     const pathString = "orders";
     try {
       const docRef = doc(db, pathString, orderId);
@@ -2882,7 +2551,6 @@ export const AdminDashboard: React.FC = () => {
       showToast("Coupon contains numeric/invalid characters. Refusing automatic approval.");
       return;
     }
-
     try {
       // 1. Write the coupon document to 'coupons' collection
       const couponDocRef = doc(db, "coupons", rawCoupon);
@@ -3062,19 +2730,6 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const executeDeleteContact = async (messageId: string) => {
-    if (user?.uid === "demo_admin_uid") {
-      try {
-        let storedContacts = localStorage.getItem("demo_contacts");
-        let currentContacts: ContactMessage[] = storedContacts ? JSON.parse(storedContacts) : [];
-        currentContacts = currentContacts.filter(c => c.id !== messageId);
-        localStorage.setItem("demo_contacts", JSON.stringify(currentContacts));
-        await fetchAllAdminData();
-      } catch (err) {
-        console.error("Local delete contact failure:", err);
-      }
-      return;
-    }
-
     const pathString = "contactMessages";
     try {
       await deleteDoc(doc(db, pathString, messageId));
@@ -3104,13 +2759,6 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const executeDeleteAllContacts = async () => {
-    if (user?.uid === "demo_admin_uid") {
-      localStorage.setItem("demo_contacts", JSON.stringify([]));
-      showToast("All contact tickets cleared (Demo Mode)");
-      await fetchAllAdminData();
-      return;
-    }
-
     const pathString = "contactMessages";
     try {
       showToast("Clearing support inbox...");
@@ -3156,19 +2804,6 @@ export const AdminDashboard: React.FC = () => {
       searchConsoleVerification: cleanSearchConsole,
       facebookDomainVerification: cleanFacebookVerification
     };
-
-    if (user?.uid === "demo_admin_uid") {
-      try {
-        localStorage.setItem("demo_tracking_settings", JSON.stringify(updatedSettings));
-        showToast("Success: Tracking and third-party integrations saved! (Demo Mode)");
-      } catch (err: any) {
-        showToast(`Save rejected locally: ${err?.message || String(err)}`);
-      } finally {
-        setSavingSettings(false);
-      }
-      return;
-    }
-
     try {
       const trackingDocRef = doc(db, "settings", "tracking");
       await setDoc(trackingDocRef, updatedSettings);
@@ -3212,7 +2847,7 @@ export const AdminDashboard: React.FC = () => {
             const compressed = await compressImage(rawBase64, 300, 300, 0.85);
             setHpCenterLogoUrl(compressed);
 
-            if (user && user.uid !== "demo_admin_uid") {
+            if (user) {
               const timestamp = Date.now();
               const cleanFileName = file.name.replace(/[^a-zA-Z0-9]/g, "_");
               const storageRef = ref(storage, `logo/${timestamp}_${cleanFileName}.${fileExt}`);
@@ -3273,7 +2908,7 @@ export const AdminDashboard: React.FC = () => {
             const compressed = await compressImage(rawBase64, 400, 400, 0.8);
             setOrbitUploadedImage(compressed);
 
-            if (user && user.uid !== "demo_admin_uid") {
+            if (user) {
               const timestamp = Date.now();
               const cleanFileName = file.name.replace(/[^a-zA-Z0-9]/g, "_");
               const storageRef = ref(storage, `hero_orbit/${timestamp}_${cleanFileName}.${fileExt}`);
@@ -3363,15 +2998,6 @@ export const AdminDashboard: React.FC = () => {
       orbitLink3: hpOrbitLink3,
       orbitLink4: hpOrbitLink4,
     };
-
-    if (user?.uid === "demo_admin_uid") {
-      localStorage.setItem("demo_homepage_settings", JSON.stringify(updatedSettings));
-      setDbHomepageSettings(updatedSettings);
-      showToast("Success: Homepage settings saved! (Demo Mode)");
-      setSavingHpSettings(false);
-      return;
-    }
-
     try {
       const hpDocRef = doc(db, "settings", "homepageSettings");
       await setDoc(hpDocRef, updatedSettings);
@@ -3395,7 +3021,6 @@ export const AdminDashboard: React.FC = () => {
       showToast("Error: Orbit Item Title is required.");
       return;
     }
-
     let finalImageUrl = "";
     if (orbitImageSourceType === "course") {
       const selectedCourse = courses.find(c => c.id === orbitCourseId);
@@ -3442,26 +3067,6 @@ export const AdminDashboard: React.FC = () => {
       clickActionType: orbitClickActionType,
       targetSlug: orbitTargetSlug,
     };
-
-    if (user?.uid === "demo_admin_uid") {
-      const localItems = [...dbHeroOrbitItems];
-      if (editingOrbitItem && editingOrbitItem.id) {
-        const idx = localItems.findIndex(i => i.id === editingOrbitItem.id);
-        if (idx !== -1) {
-          localItems[idx] = { ...orbitItemData, id: editingOrbitItem.id };
-        }
-      } else {
-        const newItemWithId = { ...orbitItemData, id: `orbit_demo_${Date.now()}` };
-        localItems.push(newItemWithId);
-      }
-      localItems.sort((a, b) => a.displayOrder - b.displayOrder);
-      setDbHeroOrbitItems(localItems);
-      localStorage.setItem("demo_hero_orbit_items", JSON.stringify(localItems));
-      showToast("Success: Orbit item saved! (Demo Mode)");
-      setShowOrbitModal(false);
-      return;
-    }
-
     try {
       if (editingOrbitItem && editingOrbitItem.id) {
         const itemDocRef = doc(db, "heroOrbitItems", editingOrbitItem.id);
@@ -3483,15 +3088,6 @@ export const AdminDashboard: React.FC = () => {
     if (!window.confirm("Are you sure you want to delete this orbit item? This cannot be undone.")) {
       return;
     }
-
-    if (user?.uid === "demo_admin_uid") {
-      const updatedList = dbHeroOrbitItems.filter(item => item.id !== itemId);
-      setDbHeroOrbitItems(updatedList);
-      localStorage.setItem("demo_hero_orbit_items", JSON.stringify(updatedList));
-      showToast("Deleted orbit item. (Demo Mode)");
-      return;
-    }
-
     try {
       const itemDocRef = doc(db, "heroOrbitItems", itemId);
       await deleteDoc(itemDocRef);
@@ -3516,14 +3112,6 @@ export const AdminDashboard: React.FC = () => {
     }
 
     items.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
-
-    if (user?.uid === "demo_admin_uid") {
-      setDbHeroOrbitItems(items);
-      localStorage.setItem("demo_hero_orbit_items", JSON.stringify(items));
-      showToast("Order updated! (Demo Mode)");
-      return;
-    }
-
     try {
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
@@ -3555,13 +3143,6 @@ export const AdminDashboard: React.FC = () => {
     }));
 
     setDbHeroOrbitItems(items);
-
-    if (user?.uid === "demo_admin_uid") {
-      localStorage.setItem("demo_hero_orbit_items", JSON.stringify(items));
-      showToast("Reordered via Drag & Drop! (Demo Mode)");
-      return;
-    }
-
     try {
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
@@ -3604,19 +3185,6 @@ export const AdminDashboard: React.FC = () => {
       isLiveMode: !!isLiveMode,
       enablePaymentSandbox: !!enablePaymentSandbox
     };
-
-    if (user?.uid === "demo_admin_uid") {
-      try {
-        localStorage.setItem("demo_payment_settings", JSON.stringify(updatedPaymentSettings));
-        showToast("Success: Automated Razorpay settings saved locally! (Demo Mode)");
-      } catch (err: any) {
-        showToast(`Save failed locally: ${err?.message || String(err)}`);
-      } finally {
-        setSavingPaymentSettings(false);
-      }
-      return;
-    }
-
     try {
       const paymentDocRef = doc(db, "settings", "paymentGateway");
       await setDoc(paymentDocRef, updatedPaymentSettings);
@@ -3652,14 +3220,6 @@ export const AdminDashboard: React.FC = () => {
           searchConsoleVerification: "",
           facebookDomainVerification: ""
         };
-
-        if (user?.uid === "demo_admin_uid") {
-          localStorage.setItem("demo_tracking_settings", JSON.stringify(cleared));
-          showToast("Success: Analytics settings wiped (Demo Mode)");
-          setConfirmModal(null);
-          return;
-        }
-
         try {
           const trackingDocRef = doc(db, "settings", "tracking");
           await setDoc(trackingDocRef, cleared);
@@ -3778,9 +3338,6 @@ export const AdminDashboard: React.FC = () => {
 
     if (!blogTitle.trim() || !blogSlug.trim() || !blogContent.trim()) {
       setBlogError("Required Fields: Title, Slug, and Rich Editor content are mandatory.");
-      return;
-    }
-
     const cleanSlug = blogSlug.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-_]/g, "");
 
     let finalContentUrl = "";
@@ -3815,29 +3372,15 @@ export const AdminDashboard: React.FC = () => {
       author: blogAuthor.trim() || "Admin Mentor",
       publishDate: blogPublishDate || new Date().toISOString().split("T")[0],
     };
-
-    if (user?.uid === "demo_admin_uid") {
-      const currentList = [...blogsList];
-      if (editingBlog) {
-        const idx = currentList.findIndex(b => b.id === editingBlog.id);
-        const updated = { ...editingBlog, ...payload };
-        if (idx > -1) {
-          currentList[idx] = updated;
-        }
         setBlogsList(currentList);
-        localStorage.setItem("demo_blogs", JSON.stringify(currentList));
         showToast("Success: Edited article (Demo mode simulation saved)");
       } else {
         const newBlogObj = { id: `blog_${Date.now()}`, ...payload, createdAt: new Date() };
         currentList.unshift(newBlogObj);
         setBlogsList(currentList);
-        localStorage.setItem("demo_blogs", JSON.stringify(currentList));
         showToast("Success: Published article! (Demo mode simulation saved)");
       }
       setShowBlogModal(false);
-      return;
-    }
-
     try {
       if (editingBlog) {
         const refDoc = doc(db, "blogs", editingBlog.id);
@@ -3868,15 +3411,6 @@ export const AdminDashboard: React.FC = () => {
       confirmLabel: "Delete Post",
       isDanger: true,
       onConfirm: async () => {
-        if (user?.uid === "demo_admin_uid") {
-          const filtered = blogsList.filter(b => b.id !== blogItem.id);
-          setBlogsList(filtered);
-          localStorage.setItem("demo_blogs", JSON.stringify(filtered));
-          showToast("Success: Post deleted from local storage (Demo Mode)");
-          setConfirmModal(null);
-          return;
-        }
-
         try {
           const docRef = doc(db, "blogs", blogItem.id);
           await deleteDoc(docRef);
@@ -3907,21 +3441,6 @@ export const AdminDashboard: React.FC = () => {
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
-
-    if (user?.uid === "demo_admin_uid") {
-      const stored = localStorage.getItem("demo_users");
-      const currentList: any[] = stored ? JSON.parse(stored) : fallbackUsers;
-      const updated = currentList.map(usr => 
-        usr.id === editingUser.id ? { ...usr, ...userModalForm } : usr
-      );
-      localStorage.setItem("demo_users", JSON.stringify(updated));
-      setUsersList(updated);
-      showToast("Success: Modified student profile locally (Demo Mode)");
-      setShowUserModal(false);
-      setEditingUser(null);
-      return;
-    }
-
     try {
       const uDocRef = doc(db, "users", editingUser.id);
       await updateDoc(uDocRef, {
@@ -3952,19 +3471,6 @@ export const AdminDashboard: React.FC = () => {
       confirmLabel: nextDisabled ? "Suspend Account" : "Activate Account",
       isDanger: nextDisabled,
       onConfirm: async () => {
-        if (user?.uid === "demo_admin_uid") {
-          const stored = localStorage.getItem("demo_users");
-          const currentList: any[] = stored ? JSON.parse(stored) : fallbackUsers;
-          const updated = currentList.map(usr => 
-            usr.id === st.id ? { ...usr, disabled: nextDisabled } : usr
-          );
-          localStorage.setItem("demo_users", JSON.stringify(updated));
-          setUsersList(updated);
-          showToast(`Success: Suspended status updated locally (Demo Mode)`);
-          setConfirmModal(null);
-          return;
-        }
-
         try {
           const uDocRef = doc(db, "users", st.id);
           await updateDoc(uDocRef, {
@@ -3988,17 +3494,6 @@ export const AdminDashboard: React.FC = () => {
       confirmLabel: "Hard Erasure",
       isDanger: true,
       onConfirm: async () => {
-        if (user?.uid === "demo_admin_uid") {
-          const stored = localStorage.getItem("demo_users");
-          const currentList: any[] = stored ? JSON.parse(stored) : fallbackUsers;
-          const filtered = currentList.filter(usr => usr.id !== st.id);
-          localStorage.setItem("demo_users", JSON.stringify(filtered));
-          setUsersList(filtered);
-          showToast("Success: User profile deleted from local storage (Demo Mode)");
-          setConfirmModal(null);
-          return;
-        }
-
         try {
           const uDocRef = doc(db, "users", st.id);
           await deleteDoc(uDocRef);
@@ -4102,7 +3597,6 @@ export const AdminDashboard: React.FC = () => {
       showToast("No student profile logs exist in database to export.");
       return;
     }
-
     const XLSX = await import("xlsx");
 
     const data = usersList.map(u => {
@@ -4280,7 +3774,6 @@ export const AdminDashboard: React.FC = () => {
       showToast("No active cart items exist in the database right now.");
       return;
     }
-
     const headers = [
       "Cart Item ID", "Student UID", "Student Email ID", "Course Title", "Category", "Quantity", "Price (INR)", "Total Value (INR)", "Added At"
     ];
@@ -4448,24 +3941,6 @@ export const AdminDashboard: React.FC = () => {
     ];
 
     setLoading(true);
-
-    if (user?.uid === "demo_admin_uid") {
-      try {
-        const seeded: Course[] = defaultCatalog.map((c, i) => ({
-          ...c as any as Course,
-          id: "seeded_course_" + Date.now() + "_" + i,
-          createdAt: new Date()
-        }));
-        localStorage.setItem("demo_courses", JSON.stringify(seeded));
-        await fetchAllAdminData();
-      } catch (err) {
-        console.error("Local seeding courses failure:", err);
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
-
     try {
       for (const item of defaultCatalog) {
         await addDoc(collection(db, "courses"), item);

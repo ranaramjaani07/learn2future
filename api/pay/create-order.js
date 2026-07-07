@@ -5,31 +5,41 @@ import Razorpay from "razorpay";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // ──────────────────────────────────────────────
 // FIRESTORE REST ENGINE (no firebase-admin needed on Vercel)
 // ──────────────────────────────────────────────
 function getFirebaseConfig() {
-  // Priority: env vars → JSON file
-  if (process.env.FIREBASE_PROJECT_ID) {
-    return {
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      databaseId: process.env.FIREBASE_FIRESTORE_DATABASE_ID || "(default)",
-      apiKey: process.env.FIREBASE_API_KEY || "",
-    };
+  // Priority 1: firebase-applet-config.json
+  // Bundled automatically by Vercel via "includeFiles" in vercel.json - NO env vars needed
+  // On Vercel: process.cwd() = /var/task (project root) where the file lands
+  let cfg = {};
+  const searchPaths = [
+    path.join(process.cwd(), "firebase-applet-config.json"),
+    path.join(process.cwd(), "learn2future", "firebase-applet-config.json"),
+    path.join(__dirname, "../../firebase-applet-config.json"),
+    path.join(__dirname, "../firebase-applet-config.json"),
+    path.join(__dirname, "firebase-applet-config.json"),
+  ];
+  for (const p of searchPaths) {
+    try {
+      if (fs.existsSync(p)) {
+        cfg = JSON.parse(fs.readFileSync(p, "utf-8"));
+        break;
+      }
+    } catch (_) {}
   }
-  try {
-    const jsonPath = path.join(process.cwd(), "firebase-applet-config.json");
-    if (fs.existsSync(jsonPath)) {
-      const cfg = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
-      return {
-        projectId: cfg.projectId,
-        databaseId: cfg.firestoreDatabaseId || "(default)",
-        apiKey: cfg.apiKey || "",
-      };
-    }
-  } catch (_) {}
-  return { projectId: "", databaseId: "(default)", apiKey: "" };
+
+  // Priority 2: env vars as optional override (not required)
+  const projectId  = cfg.projectId             || process.env.FIREBASE_PROJECT_ID              || "";
+  const databaseId = cfg.firestoreDatabaseId   || process.env.FIREBASE_FIRESTORE_DATABASE_ID   || "(default)";
+  const apiKey     = cfg.apiKey                || process.env.FIREBASE_API_KEY                  || "";
+
+  return { projectId, databaseId, apiKey };
 }
 
 const fbConfig = getFirebaseConfig();
@@ -99,6 +109,19 @@ async function firestoreGet(collection, docId) {
   }
 }
 
+async function checkIsAdminUser(userId, email) {
+  if (email && email.toLowerCase() === "digitalcoursesbay@gmail.com") {
+    return true;
+  }
+  const adminDoc = await firestoreGet("admins", userId);
+  if (adminDoc) return true;
+  if (email) {
+    const adminUserDoc = await firestoreGet("adminUsers", email.toLowerCase());
+    if (adminUserDoc && adminUserDoc.role === "admin") return true;
+  }
+  return false;
+}
+
 // ──────────────────────────────────────────────
 // No hardcoded default keys — must be set via
 // Vercel env vars or Admin → Settings → Payment
@@ -121,28 +144,26 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "courseId, amount, and userId are required." });
     }
 
-    // ── Fetch payment settings from Firestore ──
+    // ── Fetch payment settings from Firestore (with env var fallback) ──
     const paySettings = await firestoreGet("settings", "paymentGateway");
-    const keyId = paySettings?.razorpayKeyId || process.env.RAZORPAY_KEY_ID || DEFAULT_KEY_ID;
-    const keySecret = paySettings?.razorpayKeySecret || process.env.RAZORPAY_KEY_SECRET || "";
+
+    // Keys come from Firestore: Admin → Settings → Payment Gateway
+    // (No env vars needed - uses firebase-applet-config.json bundled with function)
+    const keyId     = (paySettings?.razorpayKeyId     || "").trim();
+    const keySecret = (paySettings?.razorpayKeySecret || "").trim();
 
     if (!keyId || !keySecret) {
       return res.status(400).json({
-        error: "Razorpay credentials not configured. Please set them in Admin → Settings → Payment Gateway.",
+        error: "Razorpay credentials not configured. Please go to Admin → Settings → Payment Gateway and enter your Razorpay Key ID and Key Secret.",
+        hint: "Both razorpayKeyId and razorpayKeySecret must be saved in Admin Settings."
       });
     }
 
-    const isPlaceholderKey = keyId === DEFAULT_KEY_ID;
-    const PAYMENT_ENV = process.env.PAYMENT_ENV || "DEVELOPMENT";
-    const isProduction = PAYMENT_ENV === "PRODUCTION";
-
-    // ── Duplicate enrollment check ── DELETED AS PER USER REQUEST TO ALLOW BUYING MULTIPLE TIMES
-
-    // ── Try real Razorpay first, fall back to simulator in dev ──
+    // Always use real Razorpay — no sandbox simulation for students
     let order;
     let isSimulated = false;
 
-    if (!isPlaceholderKey) {
+    {
       // Real Razorpay
       try {
         let RazorpayClass = Razorpay;
@@ -160,18 +181,6 @@ export default async function handler(req, res) {
           error: `Razorpay error: ${rzpErr?.message || "Gateway unavailable. Check your API credentials."}`,
         });
       }
-    } else if (!isProduction) {
-      // Sandbox simulation in dev/staging
-      isSimulated = true;
-      order = {
-        id: "order_sim_" + Date.now().toString().slice(-8) + Math.random().toString(36).slice(2, 6),
-        amount: Math.round(Number(amount) * 100),
-        currency: "INR",
-      };
-    } else {
-      return res.status(400).json({
-        error: "Sandbox is disabled in PRODUCTION. Please configure real Razorpay credentials in Admin Settings.",
-      });
     }
 
     return res.status(200).json({

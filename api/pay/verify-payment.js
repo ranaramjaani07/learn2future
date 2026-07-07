@@ -4,30 +4,72 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // ──────────────────────────────────────────────
 // FIRESTORE REST ENGINE (no firebase-admin needed on Vercel)
 // ──────────────────────────────────────────────
 function getFirebaseConfig() {
-  if (process.env.FIREBASE_PROJECT_ID) {
-    return {
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      databaseId: process.env.FIREBASE_FIRESTORE_DATABASE_ID || "(default)",
-      apiKey: process.env.FIREBASE_API_KEY || "",
-    };
+  // Priority 1: firebase-applet-config.json
+  // Bundled automatically via vercel.json "includeFiles" - NO env vars needed
+  let cfg = {};
+  const searchPaths = [
+    path.join(process.cwd(), "firebase-applet-config.json"),
+    path.join(process.cwd(), "learn2future", "firebase-applet-config.json"),
+    path.join(__dirname, "../../firebase-applet-config.json"),
+    path.join(__dirname, "../firebase-applet-config.json"),
+    path.join(__dirname, "firebase-applet-config.json"),
+  ];
+  for (const p of searchPaths) {
+    try {
+      if (fs.existsSync(p)) {
+        cfg = JSON.parse(fs.readFileSync(p, "utf-8"));
+        break;
+      }
+    } catch (_) {}
   }
-  try {
-    const jsonPath = path.join(process.cwd(), "firebase-applet-config.json");
-    if (fs.existsSync(jsonPath)) {
-      const cfg = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
-      return {
-        projectId: cfg.projectId,
-        databaseId: cfg.firestoreDatabaseId || "(default)",
-        apiKey: cfg.apiKey || "",
-      };
-    }
-  } catch (_) {}
-  return { projectId: "", databaseId: "(default)", apiKey: "" };
+
+  const projectId  = cfg.projectId           || process.env.FIREBASE_PROJECT_ID            || "";
+  const databaseId = cfg.firestoreDatabaseId || process.env.FIREBASE_FIRESTORE_DATABASE_ID  || "(default)";
+  const apiKey     = cfg.apiKey              || process.env.FIREBASE_API_KEY                || "";
+
+  return { projectId, databaseId, apiKey };
+};
+  const searchPaths = [
+    path.join(process.cwd(), "firebase-applet-config.json"),
+    path.join(process.cwd(), "learn2future", "firebase-applet-config.json"),
+    path.join(__dirname, "firebase-applet-config.json"),
+    path.join(__dirname, "../firebase-applet-config.json"),
+    path.join(__dirname, "../../firebase-applet-config.json"),
+    path.join(__dirname, "../../../firebase-applet-config.json")
+  ];
+
+  let loadedPath = "None";
+  for (const p of searchPaths) {
+    try {
+      if (fs.existsSync(p)) {
+        cfg = JSON.parse(fs.readFileSync(p, "utf-8"));
+        loadedPath = p;
+        break;
+      }
+    } catch (_) {}
+  }
+
+  const projectId = cfg.projectId || process.env.FIREBASE_PROJECT_ID || "";
+  const databaseId = cfg.firestoreDatabaseId || process.env.FIREBASE_FIRESTORE_DATABASE_ID || "(default)";
+  const apiKey = cfg.apiKey || process.env.FIREBASE_API_KEY || "";
+
+  console.log(`[FIREBASE-CONFIG-DIAGNOSTICS] Loaded config from path: ${loadedPath}`);
+  console.log(`[FIREBASE-CONFIG-DIAGNOSTICS] Project: ${projectId || "MISSING"}, Database: ${databaseId}, API Key Present: ${!!apiKey}`);
+
+  return {
+    projectId,
+    databaseId,
+    apiKey,
+  };
 }
 
 const fbConfig = getFirebaseConfig();
@@ -132,6 +174,19 @@ async function firestoreQuery(collection, filters) {
   }
 }
 
+async function checkIsAdminUser(userId, email) {
+  if (email && email.toLowerCase() === "digitalcoursesbay@gmail.com") {
+    return true;
+  }
+  const adminDoc = await firestoreGet("admins", userId);
+  if (adminDoc) return true;
+  if (email) {
+    const adminUserDoc = await firestoreGet("adminUsers", email.toLowerCase());
+    if (adminUserDoc && adminUserDoc.role === "admin") return true;
+  }
+  return false;
+}
+
 const DEFAULT_KEY_ID = process.env.RAZORPAY_KEY_ID || "";
 
 export default async function handler(req, res) {
@@ -165,20 +220,26 @@ export default async function handler(req, res) {
 
     // ── Load payment settings ──
     const paySettings = await firestoreGet("settings", "paymentGateway");
-    const keyId = paySettings?.razorpayKeyId || process.env.RAZORPAY_KEY_ID || DEFAULT_KEY_ID;
-    const keySecret = paySettings?.razorpayKeySecret || process.env.RAZORPAY_KEY_SECRET || "";
+    // Keys from Firestore: Admin → Settings → Payment Gateway
+    const keyId     = (paySettings?.razorpayKeyId     || "").trim();
+    const keySecret = (paySettings?.razorpayKeySecret || "").trim();
 
     const PAYMENT_ENV = process.env.PAYMENT_ENV || "DEVELOPMENT";
     const isProduction = PAYMENT_ENV === "PRODUCTION";
-    const isPlaceholderKey = keyId === DEFAULT_KEY_ID;
+    // isPlaceholderKey check removed - always use configured keys
     const isSimulatedOrder =
       razorpay_order_id.startsWith("order_sim_") || razorpay_signature === "simulated_bypass_sig";
 
-    // ── Security: Block simulation in production ──
-    if (isSimulatedOrder && isProduction) {
-      await logAudit(razorpay_payment_id, razorpay_order_id, userId, [courseId], "Failed: Unauthorized Simulation in Production");
-      return res.status(400).json({
-        error: "Sandbox simulation is disabled in PRODUCTION. Real cryptographic verification is required.",
+    // ── Security Policy Enforcement: Restrict Sandbox Simulation to Verified Administrators ──
+    const isAdmin = await checkIsAdminUser(userId, email || "");
+    const isTestModeActive = paySettings?.isTestMode === true || paySettings?.enablePaymentSandbox === true;
+
+    const isSandboxAllowed = isTestModeActive && isAdmin;
+
+    if (isSimulatedOrder && !isSandboxAllowed) {
+      await logAudit(razorpay_payment_id, razorpay_order_id, userId, [courseId], "Failed: Blocked Sandbox Simulation (Unauthorized/Non-Admin)");
+      return res.status(403).json({
+        error: "Access Denied: Sandbox simulation is disabled or unauthorized for this user.",
       });
     }
 
