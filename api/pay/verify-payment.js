@@ -2,15 +2,16 @@
 // Cryptographically verifies Razorpay signature and atomically enrolls the user
 
 import crypto from "crypto";
-// ──────────────────────────────────────────────
-// Firebase config - embedded directly (100% reliable on Vercel free plan)
-// These are CLIENT-SIDE config values, public by design.
-// ──────────────────────────────────────────────
-const FIREBASE_PROJECT_ID  = "gen-lang-client-0184060575";
-const FIREBASE_DATABASE_ID = "ai-studio-2980de92-2452-4a19-90f8-80bf9307d675";
-const FIREBASE_API_KEY     = "AIzaSyDNOLIpG63IIQVXtjJ3w5Uzv6KytI7amyM";
+import {
+  FIREBASE_PROJECT_ID,
+  FIREBASE_DATABASE_ID,
+  FIREBASE_API_KEY,
+  FIRESTORE_BASE_URL,
+  RAZORPAY_KEY_ID   as CONFIG_RAZORPAY_KEY_ID,
+  RAZORPAY_KEY_SECRET as CONFIG_RAZORPAY_KEY_SECRET,
+} from "../_config.js";
 
-const BASE_URL = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIREBASE_DATABASE_ID}/documents`;
+const BASE_URL = FIRESTORE_BASE_URL;
 
 // ── Encode a JS value to Firestore proto format ──
 function encodeValue(val) {
@@ -158,8 +159,8 @@ export default async function handler(req, res) {
     // ── Load payment settings ──
     const paySettings = await firestoreGet("settings", "paymentGateway");
     // Keys from Firestore: Admin → Settings → Payment Gateway
-    const keyId     = (paySettings?.razorpayKeyId     || "").trim();
-    const keySecret = (paySettings?.razorpayKeySecret || "").trim();
+    const keyId     = (paySettings?.razorpayKeyId     || "").trim() || CONFIG_RAZORPAY_KEY_ID.trim();
+    const keySecret = (paySettings?.razorpayKeySecret || "").trim() || CONFIG_RAZORPAY_KEY_SECRET.trim();
 
     const PAYMENT_ENV = process.env.PAYMENT_ENV || "DEVELOPMENT";
     const isProduction = PAYMENT_ENV === "PRODUCTION";

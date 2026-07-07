@@ -2,14 +2,15 @@
 // Handles Razorpay payment.captured / order.paid webhooks securely
 
 import crypto from "crypto";
-// ──────────────────────────────────────────────
-// Firebase config - embedded directly (reliable on Vercel free plan)
-// ──────────────────────────────────────────────
-const FIREBASE_PROJECT_ID  = "gen-lang-client-0184060575";
-const FIREBASE_DATABASE_ID = "ai-studio-2980de92-2452-4a19-90f8-80bf9307d675";
-const FIREBASE_API_KEY     = "AIzaSyDNOLIpG63IIQVXtjJ3w5Uzv6KytI7amyM";
+import {
+  FIREBASE_PROJECT_ID,
+  FIREBASE_DATABASE_ID,
+  FIREBASE_API_KEY,
+  FIRESTORE_BASE_URL,
+  RAZORPAY_KEY_SECRET as CONFIG_RAZORPAY_KEY_SECRET,
+} from "../_config.js";
 
-const BASE_URL = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIREBASE_DATABASE_ID}/documents`;
+const BASE_URL = FIRESTORE_BASE_URL;
 
 function encodeValue(val) {
   if (val === null || val === undefined) return { nullValue: null };
@@ -92,7 +93,7 @@ export default async function handler(req, res) {
     // Verify webhook signature
     const webhookSignature = req.headers["x-razorpay-signature"];
     const paySettings = await firestoreGet("settings", "paymentGateway");
-    const webhookSecret = paySettings?.razorpayWebhookSecret || process.env.RAZORPAY_WEBHOOK_SECRET || "";
+    const webhookSecret = (paySettings?.razorpayWebhookSecret || "").trim() || (process.env.RAZORPAY_WEBHOOK_SECRET || "").trim() || CONFIG_RAZORPAY_KEY_SECRET.trim();
 
     if (webhookSecret) {
       if (!webhookSignature) {

@@ -3,18 +3,17 @@
 
 import Razorpay from "razorpay";
 import crypto from "crypto";
+import {
+  FIREBASE_PROJECT_ID,
+  FIREBASE_DATABASE_ID,
+  FIREBASE_API_KEY,
+  FIRESTORE_BASE_URL,
+  RAZORPAY_KEY_ID   as CONFIG_RAZORPAY_KEY_ID,
+  RAZORPAY_KEY_SECRET as CONFIG_RAZORPAY_KEY_SECRET,
+} from "../_config.js";
 
-// ──────────────────────────────────────────────
-// Firebase config - embedded directly (100% reliable on Vercel free plan)
-// These are CLIENT-SIDE config values, public by design.
-// Security = Firestore Rules. See: firebase.google.com/docs/projects/api-keys
-// Razorpay keys are NOT here - they come from Firestore (Admin → Settings)
-// ──────────────────────────────────────────────
-const FIREBASE_PROJECT_ID  = "gen-lang-client-0184060575";
-const FIREBASE_DATABASE_ID = "ai-studio-2980de92-2452-4a19-90f8-80bf9307d675";
-const FIREBASE_API_KEY     = "AIzaSyDNOLIpG63IIQVXtjJ3w5Uzv6KytI7amyM";
-
-const BASE_URL = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIREBASE_DATABASE_ID}/documents`;
+// Firestore REST base URL (from _config.js)
+const BASE_URL = FIRESTORE_BASE_URL;
 
 function decodeProtoValue(val) {
   if (!val) return null;
@@ -70,12 +69,25 @@ async function firestoreQuery(collection, filters) {
 
 async function firestoreGet(collection, docId) {
   try {
-    const res = await fetch(`${BASE_URL}/${collection}/${docId}?key=${FIREBASE_API_KEY}`);
-    if (!res.ok) return null;
+    const url = `${BASE_URL}/${collection}/${docId}?key=${FIREBASE_API_KEY}`;
+    console.log(`[FIRESTORE-GET] Fetching: projects/${FIREBASE_PROJECT_ID}/databases/${FIREBASE_DATABASE_ID}/${collection}/${docId}`);
+    const res = await fetch(url);
+    console.log(`[FIRESTORE-GET] HTTP Status: ${res.status}`);
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[FIRESTORE-GET] FAILED ${res.status}:`, errText.slice(0, 200));
+      return null;
+    }
     const data = await res.json();
-    if (!data.fields) return null;
-    return fromProto(data.fields);
-  } catch (_) {
+    if (!data.fields) {
+      console.warn(`[FIRESTORE-GET] Document ${collection}/${docId} exists but has NO fields:`, JSON.stringify(data).slice(0, 200));
+      return null;
+    }
+    const decoded = fromProto(data.fields);
+    console.log(`[FIRESTORE-GET] SUCCESS. Fields found:`, Object.keys(decoded).join(', '));
+    return decoded;
+  } catch (err) {
+    console.error(`[FIRESTORE-GET] Exception:`, err?.message || err);
     return null;
   }
 }
@@ -109,18 +121,21 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "courseId, amount, and userId are required." });
     }
 
-    // ── Fetch payment settings from Firestore (with env var fallback) ──
+    // ── Fetch payment settings ──
+    // Priority 1: Firestore (Admin Panel → Settings → Payment Gateway)
+    // Priority 2: api/_config.js hardcoded keys (guaranteed fallback)
     const paySettings = await firestoreGet("settings", "paymentGateway");
 
-    // Keys come from Firestore: Admin → Settings → Payment Gateway
-    // (No env vars needed - uses firebase-applet-config.json bundled with function)
-    const keyId     = (paySettings?.razorpayKeyId     || "").trim();
-    const keySecret = (paySettings?.razorpayKeySecret || "").trim();
+    const keyId     = (paySettings?.razorpayKeyId     || "").trim() || CONFIG_RAZORPAY_KEY_ID.trim();
+    const keySecret = (paySettings?.razorpayKeySecret || "").trim() || CONFIG_RAZORPAY_KEY_SECRET.trim();
+
+    console.log(`[create-order] keyId source: ${paySettings?.razorpayKeyId ? "Firestore" : (CONFIG_RAZORPAY_KEY_ID ? "_config.js" : "NONE")}`);
+    console.log(`[create-order] keyId prefix: ${keyId.slice(0,8) || "EMPTY"}`);
 
     if (!keyId || !keySecret) {
       return res.status(400).json({
-        error: "Razorpay credentials not configured. Please go to Admin → Settings → Payment Gateway and enter your Razorpay Key ID and Key Secret.",
-        hint: "Both razorpayKeyId and razorpayKeySecret must be saved in Admin Settings."
+        error: "Razorpay credentials not configured. Add keys to api/_config.js OR Admin → Settings → Payment Gateway.",
+        hint: "Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in api/_config.js"
       });
     }
 
