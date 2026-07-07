@@ -2,78 +2,15 @@
 // Cryptographically verifies Razorpay signature and atomically enrolls the user
 
 import crypto from "crypto";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 // ──────────────────────────────────────────────
-// FIRESTORE REST ENGINE (no firebase-admin needed on Vercel)
+// Firebase config - embedded directly (100% reliable on Vercel free plan)
+// These are CLIENT-SIDE config values, public by design.
 // ──────────────────────────────────────────────
-function getFirebaseConfig() {
-  // Priority 1: firebase-applet-config.json
-  // Bundled automatically via vercel.json "includeFiles" - NO env vars needed
-  let cfg = {};
-  const searchPaths = [
-    path.join(process.cwd(), "firebase-applet-config.json"),
-    path.join(process.cwd(), "learn2future", "firebase-applet-config.json"),
-    path.join(__dirname, "../../firebase-applet-config.json"),
-    path.join(__dirname, "../firebase-applet-config.json"),
-    path.join(__dirname, "firebase-applet-config.json"),
-  ];
-  for (const p of searchPaths) {
-    try {
-      if (fs.existsSync(p)) {
-        cfg = JSON.parse(fs.readFileSync(p, "utf-8"));
-        break;
-      }
-    } catch (_) {}
-  }
+const FIREBASE_PROJECT_ID  = "gen-lang-client-0184060575";
+const FIREBASE_DATABASE_ID = "ai-studio-2980de92-2452-4a19-90f8-80bf9307d675";
+const FIREBASE_API_KEY     = "AIzaSyDNOLIpG63IIQVXtjJ3w5Uzv6KytI7amyM";
 
-  const projectId  = cfg.projectId           || process.env.FIREBASE_PROJECT_ID            || "";
-  const databaseId = cfg.firestoreDatabaseId || process.env.FIREBASE_FIRESTORE_DATABASE_ID  || "(default)";
-  const apiKey     = cfg.apiKey              || process.env.FIREBASE_API_KEY                || "";
-
-  return { projectId, databaseId, apiKey };
-};
-  const searchPaths = [
-    path.join(process.cwd(), "firebase-applet-config.json"),
-    path.join(process.cwd(), "learn2future", "firebase-applet-config.json"),
-    path.join(__dirname, "firebase-applet-config.json"),
-    path.join(__dirname, "../firebase-applet-config.json"),
-    path.join(__dirname, "../../firebase-applet-config.json"),
-    path.join(__dirname, "../../../firebase-applet-config.json")
-  ];
-
-  let loadedPath = "None";
-  for (const p of searchPaths) {
-    try {
-      if (fs.existsSync(p)) {
-        cfg = JSON.parse(fs.readFileSync(p, "utf-8"));
-        loadedPath = p;
-        break;
-      }
-    } catch (_) {}
-  }
-
-  const projectId = cfg.projectId || process.env.FIREBASE_PROJECT_ID || "";
-  const databaseId = cfg.firestoreDatabaseId || process.env.FIREBASE_FIRESTORE_DATABASE_ID || "(default)";
-  const apiKey = cfg.apiKey || process.env.FIREBASE_API_KEY || "";
-
-  console.log(`[FIREBASE-CONFIG-DIAGNOSTICS] Loaded config from path: ${loadedPath}`);
-  console.log(`[FIREBASE-CONFIG-DIAGNOSTICS] Project: ${projectId || "MISSING"}, Database: ${databaseId}, API Key Present: ${!!apiKey}`);
-
-  return {
-    projectId,
-    databaseId,
-    apiKey,
-  };
-}
-
-const fbConfig = getFirebaseConfig();
-const BASE_URL = `https://firestore.googleapis.com/v1/projects/${fbConfig.projectId}/databases/${fbConfig.databaseId}/documents`;
+const BASE_URL = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIREBASE_DATABASE_ID}/documents`;
 
 // ── Encode a JS value to Firestore proto format ──
 function encodeValue(val) {
@@ -118,7 +55,7 @@ function fromProto(fields) {
 }
 
 async function firestoreSet(collection, docId, data) {
-  const res = await fetch(`${BASE_URL}/${collection}/${docId}?key=${fbConfig.apiKey}`, {
+  const res = await fetch(`${BASE_URL}/${collection}/${docId}?key=${FIREBASE_API_KEY}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ fields: toProto(data) }),
@@ -132,7 +69,7 @@ async function firestoreSet(collection, docId, data) {
 
 async function firestoreGet(collection, docId) {
   try {
-    const res = await fetch(`${BASE_URL}/${collection}/${docId}?key=${fbConfig.apiKey}`);
+    const res = await fetch(`${BASE_URL}/${collection}/${docId}?key=${FIREBASE_API_KEY}`);
     if (!res.ok) return null;
     const data = await res.json();
     return data.fields ? fromProto(data.fields) : null;
@@ -158,7 +95,7 @@ async function firestoreQuery(collection, filters) {
       },
     };
 
-    const res = await fetch(`${BASE_URL}:runQuery?key=${fbConfig.apiKey}`, {
+    const res = await fetch(`${BASE_URL}:runQuery?key=${FIREBASE_API_KEY}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),

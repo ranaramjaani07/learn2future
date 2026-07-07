@@ -3,47 +3,18 @@
 
 import Razorpay from "razorpay";
 import crypto from "crypto";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // ──────────────────────────────────────────────
-// FIRESTORE REST ENGINE (no firebase-admin needed on Vercel)
+// Firebase config - embedded directly (100% reliable on Vercel free plan)
+// These are CLIENT-SIDE config values, public by design.
+// Security = Firestore Rules. See: firebase.google.com/docs/projects/api-keys
+// Razorpay keys are NOT here - they come from Firestore (Admin → Settings)
 // ──────────────────────────────────────────────
-function getFirebaseConfig() {
-  // Priority 1: firebase-applet-config.json
-  // Bundled automatically by Vercel via "includeFiles" in vercel.json - NO env vars needed
-  // On Vercel: process.cwd() = /var/task (project root) where the file lands
-  let cfg = {};
-  const searchPaths = [
-    path.join(process.cwd(), "firebase-applet-config.json"),
-    path.join(process.cwd(), "learn2future", "firebase-applet-config.json"),
-    path.join(__dirname, "../../firebase-applet-config.json"),
-    path.join(__dirname, "../firebase-applet-config.json"),
-    path.join(__dirname, "firebase-applet-config.json"),
-  ];
-  for (const p of searchPaths) {
-    try {
-      if (fs.existsSync(p)) {
-        cfg = JSON.parse(fs.readFileSync(p, "utf-8"));
-        break;
-      }
-    } catch (_) {}
-  }
+const FIREBASE_PROJECT_ID  = "gen-lang-client-0184060575";
+const FIREBASE_DATABASE_ID = "ai-studio-2980de92-2452-4a19-90f8-80bf9307d675";
+const FIREBASE_API_KEY     = "AIzaSyDNOLIpG63IIQVXtjJ3w5Uzv6KytI7amyM";
 
-  // Priority 2: env vars as optional override (not required)
-  const projectId  = cfg.projectId             || process.env.FIREBASE_PROJECT_ID              || "";
-  const databaseId = cfg.firestoreDatabaseId   || process.env.FIREBASE_FIRESTORE_DATABASE_ID   || "(default)";
-  const apiKey     = cfg.apiKey                || process.env.FIREBASE_API_KEY                  || "";
-
-  return { projectId, databaseId, apiKey };
-}
-
-const fbConfig = getFirebaseConfig();
-const BASE_URL = `https://firestore.googleapis.com/v1/projects/${fbConfig.projectId}/databases/${fbConfig.databaseId}/documents`;
+const BASE_URL = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIREBASE_DATABASE_ID}/documents`;
 
 function decodeProtoValue(val) {
   if (!val) return null;
@@ -81,7 +52,7 @@ async function firestoreQuery(collection, filters) {
       },
     };
 
-    const res = await fetch(`${BASE_URL}:runQuery?key=${fbConfig.apiKey}`, {
+    const res = await fetch(`${BASE_URL}:runQuery?key=${FIREBASE_API_KEY}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -99,7 +70,7 @@ async function firestoreQuery(collection, filters) {
 
 async function firestoreGet(collection, docId) {
   try {
-    const res = await fetch(`${BASE_URL}/${collection}/${docId}?key=${fbConfig.apiKey}`);
+    const res = await fetch(`${BASE_URL}/${collection}/${docId}?key=${FIREBASE_API_KEY}`);
     if (!res.ok) return null;
     const data = await res.json();
     if (!data.fields) return null;
@@ -121,12 +92,6 @@ async function checkIsAdminUser(userId, email) {
   }
   return false;
 }
-
-// ──────────────────────────────────────────────
-// No hardcoded default keys — must be set via
-// Vercel env vars or Admin → Settings → Payment
-// ──────────────────────────────────────────────
-const DEFAULT_KEY_ID = process.env.RAZORPAY_KEY_ID || "";
 
 export default async function handler(req, res) {
   // CORS for client-side fetch
@@ -189,7 +154,6 @@ export default async function handler(req, res) {
       currency: order.currency,
       key_id: keyId,
       isSimulated,
-      paymentEnv: PAYMENT_ENV,
     });
   } catch (err) {
     console.error("[create-order] Unexpected error:", err);
