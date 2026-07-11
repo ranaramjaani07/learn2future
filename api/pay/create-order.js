@@ -70,24 +70,22 @@ async function firestoreQuery(collection, filters) {
 async function firestoreGet(collection, docId) {
   try {
     const url = `${BASE_URL}/${collection}/${docId}?key=${FIREBASE_API_KEY}`;
-    console.log(`[FIRESTORE-GET] Fetching: projects/${FIREBASE_PROJECT_ID}/databases/${FIREBASE_DATABASE_ID}/${collection}/${docId}`);
     const res = await fetch(url);
-    console.log(`[FIRESTORE-GET] HTTP Status: ${res.status}`);
     if (!res.ok) {
       const errText = await res.text();
-      console.error(`[FIRESTORE-GET] FAILED ${res.status}:`, errText.slice(0, 200));
+      if (res.status === 403) {
+        console.error(`[FIRESTORE-GET] PERMISSION DENIED for ${collection}/${docId}`);
+        console.error(`⚠️  Run: firebase deploy --only firestore:rules`);
+      } else {
+        console.error(`[FIRESTORE-GET] ${res.status} for ${collection}/${docId}:`, errText.slice(0, 200));
+      }
       return null;
     }
     const data = await res.json();
-    if (!data.fields) {
-      console.warn(`[FIRESTORE-GET] Document ${collection}/${docId} exists but has NO fields:`, JSON.stringify(data).slice(0, 200));
-      return null;
-    }
-    const decoded = fromProto(data.fields);
-    console.log(`[FIRESTORE-GET] SUCCESS. Fields found:`, Object.keys(decoded).join(', '));
-    return decoded;
+    if (!data.fields) return null;
+    return fromProto(data.fields);
   } catch (err) {
-    console.error(`[FIRESTORE-GET] Exception:`, err?.message || err);
+    console.error(`[FIRESTORE-GET] Exception for ${collection}/${docId}:`, err?.message || err);
     return null;
   }
 }

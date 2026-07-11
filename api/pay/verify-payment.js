@@ -55,17 +55,41 @@ function fromProto(fields) {
   return obj;
 }
 
-async function firestoreSet(collection, docId, data) {
-  const res = await fetch(`${BASE_URL}/${collection}/${docId}?key=${FIREBASE_API_KEY}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ fields: toProto(data) }),
-  });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`Firestore set ${collection}/${docId} failed: ${res.status} ${txt}`);
+async function firestoreSet(collection, docId, data, retries = 3) {
+  const url = `${BASE_URL}/${collection}/${docId}?key=${FIREBASE_API_KEY}`;
+  const body = JSON.stringify({ fields: toProto(data) });
+  
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      if (res.ok) return true;
+      
+      const txt = await res.text();
+      console.error(`[firestoreSet] ${collection}/${docId} attempt ${attempt}/${retries}: ${res.status}`, txt.slice(0, 300));
+      
+      // 403 = permission denied - no point retrying
+      if (res.status === 403) {
+        throw new Error(`Firestore PERMISSION DENIED for ${collection}/${docId}: ${res.status} ${txt.slice(0, 200)}
+⚠️  Deploy firestore.rules: firebase deploy --only firestore:rules`);
+      }
+      // 400 = bad request - no point retrying  
+      if (res.status === 400) {
+        throw new Error(`Firestore BAD REQUEST for ${collection}/${docId}: ${txt.slice(0, 200)}`);
+      }
+      
+      if (attempt < retries) await new Promise(r => setTimeout(r, 500 * attempt));
+      else throw new Error(`Firestore set ${collection}/${docId} failed after ${retries} attempts: ${res.status} ${txt.slice(0, 200)}`);
+    } catch (err) {
+      if (attempt === retries || err.message.includes('PERMISSION DENIED') || err.message.includes('BAD REQUEST')) {
+        throw err;
+      }
+      await new Promise(r => setTimeout(r, 500 * attempt));
+    }
   }
-  return true;
 }
 
 async function firestoreGet(collection, docId) {
@@ -293,7 +317,7 @@ async function enrollUser({ userId, courseId, razorpay_order_id, razorpay_paymen
     timestamp: new Date().toISOString(),
   });
 
-  // Update coupon usage stats
+  // Update coupon usage stats + affiliate commission
   const couponCode = meta.couponCode;
   if (couponCode && couponCode !== "None" && couponCode.trim()) {
     try {
@@ -304,6 +328,30 @@ async function enrollUser({ userId, courseId, razorpay_order_id, razorpay_paymen
           usedCount: (coupon.usedCount || 0) + 1,
           totalSales: (coupon.totalSales || 0) + Number(meta.price || 0),
         });
+
+        // If coupon belongs to an affiliate, record commission sale
+        if (coupon.affiliateUid && coupon.commissionPercent) {
+          const saleAmount   = Number(meta.price || 0);
+          const commissionAmt = Math.round((saleAmount * coupon.commissionPercent) / 100 * 100) / 100;
+          const saleId = "sale_" + orderId + "_" + couponCode.trim();
+          try {
+            await firestoreSet("affiliate_sales", saleId, {
+              saleId,
+              orderId,
+              affiliateUid:      coupon.affiliateUid,
+              couponCode:        couponCode.trim().toUpperCase(),
+              commissionPercent: coupon.commissionPercent,
+              saleAmount,
+              commissionAmount:  commissionAmt,
+              buyerUserId:       userId,
+              purchasedCourses:  enrolledIds,
+              status:            "Pending",
+              createdAt:         new Date().toISOString(),
+            });
+          } catch (affErr) {
+            console.warn("[enrollUser] Affiliate sale record failed (non-critical):", affErr?.message);
+          }
+        }
       }
     } catch (_) {}
   }
