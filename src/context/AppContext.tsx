@@ -516,19 +516,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         }
 
-        // ── FIXED: One-time getDoc instead of persistent onSnapshot ──
+        // ── Profile fetch: localStorage fast-path → Firestore ──
+        const cacheKey = `l2f_onboarding_done_${currentUser.uid}`;
+        const hasCachedOnboarding = localStorage.getItem(cacheKey) === "true";
+        
+        // FAST PATH: If user completed onboarding before (cached), set a minimal
+        // dbUser stub immediately so onboarding useEffect doesn't fire prematurely.
+        // The real Firestore data will overwrite this in a moment.
+        if (hasCachedOnboarding) {
+          setDbUser(prev => prev ?? { onboardingCompleted: true, uid: currentUser.uid } as any);
+        }
+
         const userDocRef = doc(db, "users", currentUser.uid);
         try {
           const snap = await getDoc(userDocRef);
           if (snap.exists()) {
-            setDbUser(snap.data() as DbUser);
+            const userData = snap.data() as DbUser;
+            setDbUser(userData);
+            // Keep localStorage in sync with Firestore truth
+            if (userData.onboardingCompleted) {
+              localStorage.setItem(cacheKey, "true");
+            } else {
+              localStorage.removeItem(cacheKey);
+            }
           } else {
-            setDbUser(null);
+            // No Firestore record yet
+            if (!hasCachedOnboarding) {
+              setDbUser(null);
+            }
+            // If cached says done but Firestore has no record → trust cache (race condition)
+            // Firestore write may be in-flight. Don't send to onboarding.
           }
         } catch (err: any) {
           console.warn("[AppContext] User profile fetch failed:", err);
           const isQuota = err?.message?.toLowerCase().includes("quota") || err?.message?.toLowerCase().includes("resource_exhausted");
-          if (isQuota) setIsQuotaExceeded(true);
+          if (isQuota) {
+            setIsQuotaExceeded(true);
+          }
+          // Network error: trust localStorage cache to prevent false onboarding
+          // If no cache → dbUser stays null → onboarding will correctly show
         } finally {
           setLoadingProfile(false);
         }
@@ -537,6 +563,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const adminCheck = await checkAdminPrivilege(currentUser);
         setIsAdmin(adminCheck);
       } else {
+        // Clear onboarding cache only if explicitly logging out (not just auth state change)
+        // We keep the cache so if re-login happens quickly it doesn't flash onboarding
         setDbUser(null);
         setIsAdmin(false);
         setLoadingProfile(false);
@@ -709,6 +737,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     try {
       await setDoc(doc(db, "users", user.uid), newUserRecord);
+      // Cache in localStorage for instant fast-path on next login
+      localStorage.setItem(`l2f_onboarding_done_${user.uid}`, "true");
+      // Update local state immediately so UI transitions without waiting for re-fetch
+      setDbUser(newUserRecord as any);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
     }
@@ -950,8 +982,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       if (user) {
         await logUserActivity("Logout", "Signed out of website portal");
+        // Clear onboarding cache on explicit logout
+        // Next login will re-fetch from Firestore for fresh state
+        localStorage.removeItem(`l2f_onboarding_done_${user.uid}`);
       }
-      // Only call signOut if we aren't using a mock user session
       if (true) {
         await signOut(auth);
       }
