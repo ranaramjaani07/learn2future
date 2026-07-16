@@ -21,7 +21,9 @@ export const CartPage: React.FC = () => {
     clearCart, 
     globalSettings,
     setCurrentPage,
-    logUserActivity
+    logUserActivity,
+    urlReferrerId,
+    showToast,
   } = useApp();
 
   // Multi-step phase: "review" | "details" | "payment" | "success"
@@ -221,12 +223,27 @@ export const CartPage: React.FC = () => {
       const couponSnap = await getDoc(couponRef);
       if (couponSnap.exists()) {
         const data = couponSnap.data();
+        // Check isActive flag
         if (!data.isActive) {
-          setCouponError("This promo code is currently expired or inactive.");
+          setCouponError("This promo code is currently inactive. Please contact support.");
           return;
         }
+        // Check expiry date
+        if (data.expiresAt && data.expiresAt.trim()) {
+          const expiry = new Date(data.expiresAt);
+          if (!isNaN(expiry.getTime()) && expiry < new Date()) {
+            setCouponError("This promo code has expired.");
+            return;
+          }
+        }
+        // Check max uses
+        if (data.maxUses && !data.unlimitedUses && (data.usedCount || 0) >= data.maxUses) {
+          setCouponError("This promo code has reached its usage limit.");
+          return;
+        }
+        // Check minimum order value
         if (data.minOrderValue && cartSubtotal < data.minOrderValue) {
-          setCouponError(`Min order total to apply this code is ₹${data.minOrderValue.toLocaleString()}`);
+          setCouponError(`Minimum order ₹${data.minOrderValue.toLocaleString()} required for this code.`);
           return;
         }
         setDiscountType(data.type);
@@ -311,6 +328,7 @@ export const CartPage: React.FC = () => {
           originalPrice: cartSubtotal,
           discountApplied: discountAmount,
           couponCode: appliedCoupon || "None",
+          referrerId: urlReferrerId || "",
           cartItems: cart.map(item => ({
             productId: item.productId,
             productTitle: item.productTitle,
@@ -408,6 +426,7 @@ export const CartPage: React.FC = () => {
           originalPrice: cartSubtotal,
           discountApplied: discountAmount,
           couponCode: appliedCoupon || "None",
+          referrerId: urlReferrerId || "",
           cartItems: cart.map(item => ({
             productId: item.productId,
             productTitle: item.productTitle,
@@ -539,6 +558,7 @@ export const CartPage: React.FC = () => {
           email: checkoutForm.email,
           telegram: checkoutForm.telegram,
           couponCode: appliedCoupon || "None",
+          referrerId: urlReferrerId || "",
           cartItems: cart.map(item => ({
             productId: item.productId,
             productTitle: item.productTitle,
@@ -1343,12 +1363,12 @@ export const CartPage: React.FC = () => {
                       </div>
                       
                       <div className="border-t border-red-900/40 pt-2.5 mt-1 leading-relaxed space-y-2">
-                        <span className="font-sans font-extrabold text-brand-gold text-[10.5px] uppercase tracking-wider block">💡 What to do:</span>
+                        <span className="font-sans font-extrabold text-brand-gold text-[10.5px] uppercase tracking-wider block">💡 Sandbox Iframe / Config Block detected:</span>
                         <p className="text-[10px] text-neutral-355 leading-relaxed">
-                          The payment popup may have been blocked by your browser. Please allow popups for this site and try again, or use the UPI QR option below.
+                          Because the application is rendered inside a secure sandboxed iframe or the Razorpay API credentials are not set up in the Admin Settings yet, the automated checkout popup may be blocked.
                         </p>
                         <p className="text-[10px] text-brand-gold/90 font-bold">
-                          You can pay instantly using our direct UPI QR below!
+                          You can instantly submit your order by using our direct scan-to-pay UPI transfer below!
                         </p>
                         
                         <div className="pt-1.5 pb-0.5">

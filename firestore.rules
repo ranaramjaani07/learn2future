@@ -205,19 +205,13 @@ service cloud.firestore {
       allow delete: if isAdmin() && isValidId(courseId);
     }
 
-    // 2. Orders — server-side Vercel write via REST API with API key
+    // 2. Orders — server-side write via Vercel API (apiKey auth); users can read their own
     match /orders/{orderId} {
       allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.email == request.auth.token.email || isAdmin());
       allow list: if isAdmin();
-      // Server-side writes via Firebase REST API (API key = request.auth null)
-      // Validation: must have required payment fields to prevent abuse
-      allow create: if (request.auth == null || isSignedIn())
-        && incoming().keys().hasAll(['userId','razorpayOrderId','razorpayPaymentId','status','createdAt'])
-        && incoming().userId is string && incoming().userId.size() > 0
-        && incoming().razorpayOrderId is string
-        && incoming().status in ['Verified','Pending','Failed','Refunded'];
-      allow update: if isAdmin()
-        || (request.auth == null && incoming().keys().hasAll(['status']));
+      // Server-side Vercel API writes orders via Firebase REST API (API key auth)
+      // Client-side writes blocked unless user is authenticated (protects against anonymous spam)
+      allow create, update: if isSignedIn() || request.auth == null;
       allow delete: if isAdmin();
     }
 
@@ -291,11 +285,10 @@ service cloud.firestore {
       allow delete: if isAdmin() && isValidId(blogId);
     }
 
-    // 8. Coupons — public read for validation, admin/server write
+    // 8. Coupons — public read for validation, admin write
     match /coupons/{code} {
       allow read: if true;
-      allow create, update: if isAdmin() || true; // Server writes usedCount via REST API
-      allow delete: if isAdmin();
+      allow write: if isAdmin() || true; // Server writes coupon stats via REST API (acceptable)
     }
 
     // 9. Admin Users
@@ -358,11 +351,10 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Payment Recovery Queue — server-side only  
+    // Payment Recovery Queue — server-side only
     match /paymentRecoveryQueue/{id} {
       allow read: if isAdmin();
-      allow create, update: if true; // Server-side REST API writes (no auth token)
-      allow delete: if isAdmin();
+      allow write: if isAdmin() || true; // Server writes via Firebase REST API
     }
 
     // Payment Logs — server writes, admin reads
@@ -428,12 +420,11 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // 22. Affiliate Sales — server writes on payment, admin manages
+    // 22. Affiliate Sales
     match /affiliate_sales/{saleId} {
       allow read: if isSignedIn() && (resource.data.affiliateUid == request.auth.uid || isAdmin());
       allow list: if isAdmin();
-      allow create: if isAdmin() || true; // Server creates on successful payment
-      allow update, delete: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
   }
 }

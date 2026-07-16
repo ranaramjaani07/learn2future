@@ -55,6 +55,7 @@ export const MyEnrollments: React.FC = () => {
     authError,
     setAuthError,
     updateUserProfile,
+    loginAsDemoStudent
   } = useApp();
 
   // Tab layout state
@@ -321,6 +322,19 @@ export const MyEnrollments: React.FC = () => {
 
     setLoadingOrders(true);
 
+    if (user.uid === "demo_admin_uid" || user.uid === "demo_student_uid") {
+      try {
+        const local = localStorage.getItem("demo_orders");
+        if (local) {
+          const list = JSON.parse(local) as Order[];
+          setOrders(list.filter(o => o.email === user.email));
+        } else {
+          setOrders([]);
+        }
+      } catch (_) {}
+      setLoadingOrders(false);
+      return;
+    }
 
     // ── FIXED: One-time getDocs instead of persistent onSnapshot ──
     let cancelled = false;
@@ -350,6 +364,79 @@ export const MyEnrollments: React.FC = () => {
       return;
     }
 
+    if (user.uid === "demo_admin_uid" || user.uid === "demo_student_uid") {
+      setLoadingAffiliateApp(true);
+      try {
+        const storedApp = localStorage.getItem("demo_affiliate_app");
+        if (storedApp) {
+          setAffiliateApp(JSON.parse(storedApp));
+        } else {
+          // Default mock affiliate application
+          const defaultDemoApp = {
+            id: user.uid,
+            uid: user.uid,
+            fullName: dbUser?.fullName || user.displayName || "Demo Student",
+            email: user.email,
+            mobile: dbUser?.mobile || "+1-555-0199",
+            preferredCoupon: "DEMO15",
+            status: "approved", // Approved in demo mode so user gets to test payout requests!
+            timesUsed: 2,
+            totalOrders: 2,
+            totalRevenue: 3000,
+            estimatedEarnings: 450,
+            pendingEarnings: 600, // Meets the ₹500 threshold so they can test requesting a payout!
+            paidEarnings: 0,
+            upiId: "",
+            bankAccount: "",
+            ifsc: "",
+            beneficiaryName: ""
+          };
+          setAffiliateApp(defaultDemoApp);
+        }
+
+        const storedSales = localStorage.getItem("demo_affiliate_sales");
+        if (storedSales) {
+          setAffiliateSales(JSON.parse(storedSales));
+        } else {
+          const defaultSales = [
+            {
+              id: "sale_sim_1",
+              affiliateUid: user.uid,
+              buyerEmail: "buyer_one@gmail.com",
+              buyerName: "Rahul Sharma",
+              courseTitle: "Fullstack Web Engineering",
+              coursePrice: 1999,
+              commissionPercent: 15,
+              allocatedCommission: 300,
+              purchaseDate: { seconds: Math.floor(Date.now() / 1000) - 86400 }
+            },
+            {
+              id: "sale_sim_2",
+              affiliateUid: user.uid,
+              buyerEmail: "buyer_two@gmail.com",
+              buyerName: "Sneha Patel",
+              courseTitle: "Advanced JavaScript Masters",
+              coursePrice: 999,
+              commissionPercent: 15,
+              allocatedCommission: 150,
+              purchaseDate: { seconds: Math.floor(Date.now() / 1000) - 172800 }
+            }
+          ];
+          setAffiliateSales(defaultSales);
+        }
+
+        const storedPayouts = localStorage.getItem("demo_payout_requests");
+        if (storedPayouts) {
+          setPayoutsList(JSON.parse(storedPayouts));
+        } else {
+          setPayoutsList([]);
+        }
+      } catch (err) {
+        console.error("Error loading demo affiliate state:", err);
+      }
+      setLoadingAffiliateApp(false);
+      return;
+    }
 
     // ── FIXED: One-time getDocs instead of 3 persistent onSnapshot listeners ──
     setLoadingAffiliateApp(true);
@@ -438,6 +525,13 @@ export const MyEnrollments: React.FC = () => {
         upDoc.beneficiaryName = settlementBeneficiaryName.trim();
       }
 
+      if (user?.uid === "demo_admin_uid" || user?.uid === "demo_student_uid") {
+        const updatedApp = { ...affiliateApp, ...upDoc };
+        setAffiliateApp(updatedApp);
+        localStorage.setItem("demo_affiliate_app", JSON.stringify(updatedApp));
+        setSettlementSuccess("Settlement details saved & synchronized successfully (Demo Mode)!");
+        return;
+      }
 
       await updateDoc(doc(db, "affiliate_applications", user.uid), upDoc);
       setSettlementSuccess("Settlement details saved & synchronized successfully!");
@@ -483,6 +577,29 @@ export const MyEnrollments: React.FC = () => {
     window.open(deliverableLink, "_blank", "noopener,noreferrer");
 
     // Track access metrics
+    if (user?.uid === "demo_admin_uid" || user?.uid === "demo_student_uid") {
+      try {
+        const local = localStorage.getItem("demo_orders");
+        if (local) {
+          let currentOrders = JSON.parse(local) as Order[];
+          currentOrders = currentOrders.map(o => {
+            if (o.id === order.id) {
+              return {
+                ...o,
+                accessCount: (o.accessCount || 0) + 1,
+                lastAccessTime: new Date()
+              };
+            }
+            return o;
+          });
+          localStorage.setItem("demo_orders", JSON.stringify(currentOrders));
+          setOrders(currentOrders.filter(o => o.email === user.email));
+        }
+      } catch (err) {
+        console.error("Local stats update failure:", err);
+      }
+      return;
+    }
 
     try {
       const orderRef = doc(db, "orders", order.id || "");
@@ -534,6 +651,46 @@ export const MyEnrollments: React.FC = () => {
 
     setSubmittingApp(true);
     try {
+      if (user?.uid === "demo_admin_uid" || user?.uid === "demo_student_uid") {
+        const payload = {
+          uid: user.uid,
+          fullName: dbUser?.fullName || user.displayName || "Demo Student",
+          email: user.email,
+          mobile: dbUser?.mobile || appMobile.trim() || "+1-555-0199",
+          preferredCoupon: cleanedCoupon,
+          question: promoAnswer.trim(),
+          status: "pending",
+          createdAt: new Date(),
+          address: dbUser?.address || "",
+          city: dbUser?.city || "",
+          state: dbUser?.state || "",
+          country: dbUser?.country || "",
+          instagramUrl: dbUser?.instagramUrl || "",
+          youtubeUrl: dbUser?.youtubeUrl || "",
+          facebookUrl: dbUser?.facebookUrl || "",
+          linkedinUrl: dbUser?.linkedinUrl || "",
+          twitterUrl: dbUser?.twitterUrl || "",
+          telegramUsername: dbUser?.telegramUsername || "",
+          websiteUrl: dbUser?.websiteUrl || "",
+          timesUsed: 0,
+          totalOrders: 0,
+          totalRevenue: 0,
+          estimatedEarnings: 0,
+          pendingEarnings: 0,
+          paidEarnings: 0,
+          upiId: "",
+          bankAccount: "",
+          ifsc: "",
+          beneficiaryName: ""
+        };
+        setAffiliateApp(payload);
+        localStorage.setItem("demo_affiliate_app", JSON.stringify(payload));
+        setAppSuccess("Your Affiliate Application was submitted successfully for team review (Demo Mode)!");
+        setPrefCoupon("");
+        setPromoAnswer("");
+        setSubmittingApp(false);
+        return;
+      }
 
       // Check for duplicates
       const couponSnap = await getDoc(doc(db, "coupons", cleanedCoupon));
@@ -655,6 +812,33 @@ export const MyEnrollments: React.FC = () => {
         paymentDetails: pDetails
       };
 
+      if (user?.uid === "demo_admin_uid" || user?.uid === "demo_student_uid") {
+        const payoutPayload = {
+          id: payoutId,
+          uid: user.uid,
+          name: dbUser?.fullName || affiliateApp.fullName || "Partner",
+          email: user.email,
+          phone: dbUser?.mobile || affiliateApp.mobile || "",
+          couponCode: affiliateApp.couponCode || affiliateApp.preferredCoupon || "",
+          commissionPercent: Number(affiliateApp.commissionPercent || 15),
+          amount: currentPending,
+          requestDate: new Date(),
+          status: "Pending",
+          paymentDetails: pDetails
+        };
+        const newList = [payoutPayload, ...payoutsList];
+        setPayoutsList(newList);
+        localStorage.setItem("demo_payout_requests", JSON.stringify(newList));
+
+        // Deduct from pending and lock
+        const updatedApp = { ...affiliateApp, pendingEarnings: 0 };
+        setAffiliateApp(updatedApp);
+        localStorage.setItem("demo_affiliate_app", JSON.stringify(updatedApp));
+
+        setPayoutSuccess(`Payout request for ₹${currentPending.toFixed(2)} submitted successfully (Demo Mode)!`);
+        setSubmittingPayout(false);
+        return;
+      }
 
       await setDoc(doc(db, "payout_requests", payoutId), payoutPayload);
 
@@ -675,6 +859,15 @@ export const MyEnrollments: React.FC = () => {
 
   const handleResetApplication = async () => {
     if (window.confirm("Are you sure you want to withdraw this application to submit a new one?")) {
+      if (user?.uid === "demo_admin_uid" || user?.uid === "demo_student_uid") {
+        setAffiliateApp(null);
+        localStorage.removeItem("demo_affiliate_app");
+        localStorage.removeItem("demo_payout_requests");
+        localStorage.removeItem("demo_affiliate_sales");
+        setAppError("");
+        setAppSuccess("");
+        return;
+      }
       try {
         await deleteDoc(doc(db, "affiliate_applications", user.uid));
         setAppError("");
@@ -937,6 +1130,13 @@ export const MyEnrollments: React.FC = () => {
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.85c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
               </svg>
               <span>Continue with Google</span>
+            </button>
+
+            <button
+              onClick={loginAsDemoStudent}
+              className="w-full relative bg-brand-gold text-black font-bold px-6 py-3 rounded-xl transition-all shadow-sm active:scale-95 duration-200 flex items-center justify-center gap-2 text-sm hover:bg-[#F5B300]"
+            >
+              <span>Demo Student Bypass (Iframe Safe)</span>
             </button>
           </div>
 
@@ -2322,6 +2522,34 @@ export const MyEnrollments: React.FC = () => {
                         </button>
                       </div>
                     </div>
+
+                    {/* Referral Link */}
+                    {(affiliateApp.referralLink || affiliateApp.couponCode) && (
+                      <div className="bg-neutral-900/60 p-5 rounded-2xl border border-neutral-800 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] font-mono text-zinc-500 font-bold tracking-widest uppercase">Your Referral Link</span>
+                          <span className="text-[9px] font-mono text-brand-gold/70">Share this link on social media</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 bg-neutral-950 px-3 py-2.5 rounded-xl border border-neutral-800 text-[10px] font-mono text-neutral-400 truncate select-all">
+                            {affiliateApp.referralLink || `https://learn2future.vercel.app/courses?ref=${affiliateApp.couponCode}`}
+                          </div>
+                          <button
+                            onClick={() => {
+                              const link = affiliateApp.referralLink || `https://learn2future.vercel.app/courses?ref=${affiliateApp.couponCode}`;
+                              navigator.clipboard.writeText(link);
+                              showToast("Referral link copied!");
+                            }}
+                            className="bg-neutral-800 hover:bg-neutral-700 text-white px-3 py-2.5 rounded-xl text-[10px] font-mono transition-all flex items-center gap-1.5"
+                          >
+                            <Copy className="w-3.5 h-3.5" /> Copy Link
+                          </button>
+                        </div>
+                        <p className="text-[9px] text-neutral-600 font-mono">
+                          When someone clicks your link and purchases a course, you earn commission automatically.
+                        </p>
+                      </div>
+                    )}
 
                     {/* Affiliate Terms Box */}
                     <div className="bg-neutral-900/60 p-6 rounded-2xl border border-neutral-800 flex flex-col justify-between">

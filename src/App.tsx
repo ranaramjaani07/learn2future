@@ -50,6 +50,8 @@ const MainLayout: React.FC = () => {
     setAuthModalOpen, 
     authModalMessage, 
     loginWithGoogle, 
+    loginAsDemoStudent,
+    loginAsDemoAdmin,
     isQuotaExceeded,
     user, 
     setCurrentPage,
@@ -149,6 +151,22 @@ const MainLayout: React.FC = () => {
               >
                 Open Google Console <ArrowUpRight className="w-3.5 h-3.5" />
               </a>
+              <button
+                onClick={() => {
+                  loginAsDemoStudent();
+                }}
+                className="bg-white hover:bg-neutral-100 text-neutral-900 font-sans text-[10px] font-bold py-1.5 px-3 rounded-lg transition-all shadow-sm uppercase tracking-wider"
+              >
+                Bypass as Student
+              </button>
+              <button
+                onClick={() => {
+                  loginAsDemoAdmin();
+                }}
+                className="bg-amber-400 hover:bg-amber-500 text-black font-sans text-[10px] font-bold py-1.5 px-3 rounded-lg transition-all shadow-sm uppercase tracking-wider"
+              >
+                Bypass as Admin
+              </button>
             </div>
           </div>
         </div>
@@ -291,6 +309,15 @@ const MainLayout: React.FC = () => {
                     className="w-full bg-[#1A6EF2] hover:bg-[#1A6EF2]/95 text-white/95 py-3 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-colors"
                   >
                     Quick Google Sign-In
+                  </button>
+                  <button 
+                    onClick={() => {
+                      loginAsDemoStudent();
+                      setAuthModalOpen(false);
+                    }}
+                    className="w-full bg-brand-gold hover:bg-[#ffd34d] text-black py-3 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-colors"
+                  >
+                    Demo Student Bypass (Iframe Safe)
                   </button>
                 </div>
               )}

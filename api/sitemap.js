@@ -1,18 +1,18 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, getDocs, query, orderBy } from "firebase/firestore";
+import fs from "fs";
+import path from "path";
+
 export default async function handler(req, res) {
   try {
-    // Firebase config embedded directly (reliable on Vercel free plan, no env vars needed)
-    const firebaseConfig = {
-      projectId:         "gen-lang-client-0184060575",
-      apiKey:            "AIzaSyDNOLIpG63IIQVXtjJ3w5Uzv6KytI7amyM",
-      authDomain:        "gen-lang-client-0184060575.firebaseapp.com",
-      appId:             "1:192596840998:web:d2f1ab682e73d6081f8ce7",
-      storageBucket:     "gen-lang-client-0184060575.firebasestorage.app",
-      messagingSenderId: "192596840998",
-    };
+    const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+    if (!fs.existsSync(configPath)) {
+      throw new Error("firebase-applet-config.json missing from workspace root.");
+    }
+    const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    
     const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app, "ai-studio-2980de92-2452-4a19-90f8-80bf9307d675");
+    const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
     // Resolve sitemap type from query parameter
     const type = req.query.type || "index";

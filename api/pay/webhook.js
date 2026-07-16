@@ -2,15 +2,57 @@
 // Handles Razorpay payment.captured / order.paid webhooks securely
 
 import crypto from "crypto";
-import {
-  FIREBASE_PROJECT_ID,
-  FIREBASE_DATABASE_ID,
-  FIREBASE_API_KEY,
-  FIRESTORE_BASE_URL,
-  RAZORPAY_KEY_SECRET as CONFIG_RAZORPAY_KEY_SECRET,
-} from "../_config.js";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
-const BASE_URL = FIRESTORE_BASE_URL;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export const config = {
+  api: {
+    bodyParser: false, // Need raw body for HMAC verification
+  },
+};
+
+function getFirebaseConfig() {
+  let cfg = {};
+  const searchPaths = [
+    path.join(process.cwd(), "firebase-applet-config.json"),
+    path.join(process.cwd(), "learn2future", "firebase-applet-config.json"),
+    path.join(__dirname, "firebase-applet-config.json"),
+    path.join(__dirname, "../firebase-applet-config.json"),
+    path.join(__dirname, "../../firebase-applet-config.json"),
+    path.join(__dirname, "../../../firebase-applet-config.json")
+  ];
+
+  let loadedPath = "None";
+  for (const p of searchPaths) {
+    try {
+      if (fs.existsSync(p)) {
+        cfg = JSON.parse(fs.readFileSync(p, "utf-8"));
+        loadedPath = p;
+        break;
+      }
+    } catch (_) {}
+  }
+
+  const projectId = cfg.projectId || process.env.FIREBASE_PROJECT_ID || "";
+  const databaseId = cfg.firestoreDatabaseId || process.env.FIREBASE_FIRESTORE_DATABASE_ID || "(default)";
+  const apiKey = cfg.apiKey || process.env.FIREBASE_API_KEY || "";
+
+  console.log(`[FIREBASE-CONFIG-DIAGNOSTICS] Loaded config from path: ${loadedPath}`);
+  console.log(`[FIREBASE-CONFIG-DIAGNOSTICS] Project: ${projectId || "MISSING"}, Database: ${databaseId}, API Key Present: ${!!apiKey}`);
+
+  return {
+    projectId,
+    databaseId,
+    apiKey,
+  };
+}
+
+const fbConfig = getFirebaseConfig();
+const BASE_URL = `https://firestore.googleapis.com/v1/projects/${fbConfig.projectId}/databases/${fbConfig.databaseId}/documents`;
 
 function encodeValue(val) {
   if (val === null || val === undefined) return { nullValue: null };
@@ -44,7 +86,7 @@ function fromProto(fields) {
 }
 
 async function firestoreSet(col, docId, data) {
-  const res = await fetch(`${BASE_URL}/${col}/${docId}?key=${FIREBASE_API_KEY}`, {
+  const res = await fetch(`${BASE_URL}/${col}/${docId}?key=${fbConfig.apiKey}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ fields: toProto(data) }),
@@ -54,7 +96,7 @@ async function firestoreSet(col, docId, data) {
 
 async function firestoreGet(col, docId) {
   try {
-    const res = await fetch(`${BASE_URL}/${col}/${docId}?key=${FIREBASE_API_KEY}`);
+    const res = await fetch(`${BASE_URL}/${col}/${docId}?key=${fbConfig.apiKey}`);
     if (!res.ok) return null;
     const data = await res.json();
     return data.fields ? fromProto(data.fields) : null;
@@ -67,7 +109,7 @@ async function firestoreQuery(col, filters) {
       fieldFilter: { field: { fieldPath: field }, op: op === "==" ? "EQUAL" : op, value: { stringValue: value } },
     }));
     const body = { structuredQuery: { from: [{ collectionId: col }], where: where.length === 1 ? where[0] : { compositeFilter: { op: "AND", filters: where } } } };
-    const res = await fetch(`${BASE_URL}:runQuery?key=${FIREBASE_API_KEY}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const res = await fetch(`${BASE_URL}:runQuery?key=${fbConfig.apiKey}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (!res.ok) return [];
     const rows = await res.json();
     return (rows || []).filter(r => r.document).map(r => ({ id: r.document.name.split("/").pop(), ...fromProto(r.document.fields) }));
@@ -93,7 +135,7 @@ export default async function handler(req, res) {
     // Verify webhook signature
     const webhookSignature = req.headers["x-razorpay-signature"];
     const paySettings = await firestoreGet("settings", "paymentGateway");
-    const webhookSecret = (paySettings?.razorpayWebhookSecret || "").trim() || (process.env.RAZORPAY_WEBHOOK_SECRET || "").trim() || CONFIG_RAZORPAY_KEY_SECRET.trim();
+    const webhookSecret = paySettings?.razorpayWebhookSecret || process.env.RAZORPAY_WEBHOOK_SECRET || "";
 
     if (webhookSecret) {
       if (!webhookSignature) {
