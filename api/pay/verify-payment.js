@@ -290,20 +290,33 @@ async function enrollUser({ userId, courseId, razorpay_order_id, razorpay_paymen
           const saleAmount      = Number(meta.price || 0);
           const commissionAmt   = Math.round(saleAmount * coupon.commissionPercent) / 100;
           const saleId          = `sale_${orderId}_${couponCode}`;
+          
+          // Get first course name for display
+          const firstCourseTitle = enrolledIds.length > 1
+            ? `${enrolledIds.length} Courses Bundle`
+            : (productList.find(p => p.productId === enrolledIds[0])?.productTitle || enrolledIds[0] || "Course");
 
-          // Write commission sale record
+          // Write commission sale record — fields match MyEnrollments UI expectations
           await firestoreSet("affiliate_sales", saleId, {
             saleId,
             orderId,
             affiliateUid:       coupon.affiliateUid,
             couponCode:         couponCode.toUpperCase(),
             commissionPercent:  coupon.commissionPercent,
+            // Fields MyEnrollments UI reads:
+            productName:        firstCourseTitle,
+            finalPaidAmount:    saleAmount,
+            commissionEarned:   commissionAmt,
+            discountGiven:      Number(meta.discountApplied || 0),
             saleAmount,
             commissionAmount:   commissionAmt,
             buyerUserId:        userId,
+            buyerEmail:         meta.email || "",
+            buyerName:          meta.buyerName || "",
             purchasedCourses:   enrolledIds,
-            status:             "Pending",
+            purchaseDate:       new Date().toISOString(),
             createdAt:          new Date().toISOString(),
+            status:             "Pending",
           });
 
           // Update affiliate application earnings totals

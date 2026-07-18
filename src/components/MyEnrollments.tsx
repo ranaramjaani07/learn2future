@@ -2789,7 +2789,13 @@ export const MyEnrollments: React.FC = () => {
                                 <td className="p-3 text-zinc-500">₹{(sale.discountGiven || 0).toFixed(2)}</td>
                                 <td className="p-3 text-brand-gold font-bold">₹{Number(sale.commissionEarned || 0).toFixed(2)}</td>
                                 <td className="p-3 text-zinc-500 text-[11px]">
-                                  {sale.purchaseDate?.seconds ? new Date(sale.purchaseDate.seconds * 1000).toLocaleDateString() : String(sale.purchaseDate || "Just now")}
+                                  {(() => {
+                                    const d = sale.purchaseDate || sale.createdAt;
+                                    if (!d) return "Just now";
+                                    if (typeof d === 'object' && d.seconds) return new Date(d.seconds * 1000).toLocaleDateString('en-IN');
+                                    if (typeof d === 'string') return new Date(d).toLocaleDateString('en-IN');
+                                    return "Just now";
+                                  })()}
                                 </td>
                               </tr>
                             ))}
