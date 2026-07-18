@@ -6,7 +6,7 @@ import { Footer } from "./components/Footer";
 import { AnimatePresence, motion } from "motion/react";
 import { Sparkles, ArrowUpRight } from "lucide-react";
 import { SEOHead } from "./components/SEOHead";
-
+import { AnimatedBackground } from "./components/AnimatedBackground";
 // All route components lazy loaded for optimal code splitting
 const Home = React.lazy(() => import("./components/Home").then(m => ({ default: m.Home })));
 const Courses = React.lazy(() => import("./components/Courses").then(m => ({ default: m.Courses })));
@@ -125,7 +125,8 @@ const MainLayout: React.FC = () => {
   const seoData = getPageSeo();
 
   return (
-    <div className="min-h-screen flex flex-col justify-between bg-neutral-50 dark:bg-[#000000] text-neutral-900 dark:text-white transition-colors duration-300">
+    <div className="min-h-screen flex flex-col justify-between text-neutral-900 dark:text-white transition-colors duration-300">
+      <AnimatedBackground />
       {seoData && <SEOHead {...seoData} />}
       {/* Universal header navigation */}
       <Navbar />
@@ -309,15 +310,6 @@ const MainLayout: React.FC = () => {
                     className="w-full bg-[#1A6EF2] hover:bg-[#1A6EF2]/95 text-white/95 py-3 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-colors"
                   >
                     Quick Google Sign-In
-                  </button>
-                  <button 
-                    onClick={() => {
-                      loginAsDemoStudent();
-                      setAuthModalOpen(false);
-                    }}
-                    className="w-full bg-brand-gold hover:bg-[#ffd34d] text-black py-3 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-colors"
-                  >
-                    Demo Student Bypass (Iframe Safe)
                   </button>
                 </div>
               )}

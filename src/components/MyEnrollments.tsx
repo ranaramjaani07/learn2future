@@ -75,6 +75,7 @@ export const MyEnrollments: React.FC = () => {
   const [payoutError, setPayoutError] = useState("");
   const [payoutSuccess, setPayoutSuccess] = useState("");
   const [copiedCoupon, setCopiedCoupon] = useState(false);
+  const [copiedReferral, setCopiedReferral] = useState(false);
 
   // Settlement and Profile fallbacks
   const [appMobile, setAppMobile] = useState("");
@@ -1130,13 +1131,6 @@ export const MyEnrollments: React.FC = () => {
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.85c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
               </svg>
               <span>Continue with Google</span>
-            </button>
-
-            <button
-              onClick={loginAsDemoStudent}
-              className="w-full relative bg-brand-gold text-black font-bold px-6 py-3 rounded-xl transition-all shadow-sm active:scale-95 duration-200 flex items-center justify-center gap-2 text-sm hover:bg-[#F5B300]"
-            >
-              <span>Demo Student Bypass (Iframe Safe)</span>
             </button>
           </div>
 
@@ -2538,11 +2532,12 @@ export const MyEnrollments: React.FC = () => {
                             onClick={() => {
                               const link = affiliateApp.referralLink || `https://learn2future.vercel.app/courses?ref=${affiliateApp.couponCode}`;
                               navigator.clipboard.writeText(link);
-                              showToast("Referral link copied!");
+                              setCopiedReferral(true);
+                              setTimeout(() => setCopiedReferral(false), 2000);
                             }}
-                            className="bg-neutral-800 hover:bg-neutral-700 text-white px-3 py-2.5 rounded-xl text-[10px] font-mono transition-all flex items-center gap-1.5"
+                            className="bg-neutral-800 hover:bg-neutral-700 text-white px-3 py-2.5 rounded-xl text-[10px] font-mono transition-all flex items-center gap-1.5 cursor-pointer"
                           >
-                            <Copy className="w-3.5 h-3.5" /> Copy Link
+                            <Copy className="w-3.5 h-3.5" /> {copiedReferral ? "Copied!" : "Copy Link"}
                           </button>
                         </div>
                         <p className="text-[9px] text-neutral-600 font-mono">

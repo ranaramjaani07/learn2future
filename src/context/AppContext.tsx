@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { 
   User as FirebaseUser, 
@@ -67,7 +67,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
-export type CurrentPage = "home" | "courses" | "about" | "contact" | "admin-login" | "admin-dashboard" | "my-enrollments" | "blog" | "blog-details" | "terms" | "privacy" | "onboarding" | "cart" | "thank-you" | "course-details" | "student-portfolio" | "refund-policy" | "affiliate";
+export type CurrentPage = "home" | "courses" | "about" | "contact" | "admin-login" | "admin-dashboard" | "my-enrollments" | "blog" | "blog-details" | "terms" | "privacy" | "onboarding" | "cart" | "thank-you" | "course-details" | "student-portfolio" | "refund-policy" | "affiliate" | "influencer-promotion-policy";
 
 export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   upiId: "digitalcoursesbay@upi",
@@ -193,6 +193,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     currentPage = "onboarding";
   } else if (path === "/student-portfolio" || path === "/student-portfolio/") {
     currentPage = "student-portfolio";
+  } else if (path === "/refund-policy" || path === "/refund-policy/") {
+    currentPage = "refund-policy";
+  } else if (path === "/affiliate" || path === "/affiliate/") {
+    currentPage = "affiliate";
+  } else if (path === "/influencer-promotion-policy" || path === "/influencer-promotion-policy/") {
+    currentPage = "influencer-promotion-policy";
   }
 
   const [selectedBlogSlug, setSelectedBlogSlug] = useState<string | null>(null);
@@ -395,17 +401,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Sync page state and update browser history with SEO-friendly path URLs
-  const setCurrentPage = (page: CurrentPage, extraId: string | null = null) => {
+  const setCurrentPage = useCallback((page: CurrentPage, extraId: string | null = null) => {
     let targetPath = "/";
 
     if (page === "course-details" && extraId) {
-      setSelectedCourseSlug(extraId);
+       setSelectedCourseSlug(extraId);
       targetPath = "/course/" + extraId;
     } else if (page === "student-portfolio" && extraId) {
-      setSelectedStudentUsername(extraId);
+       setSelectedStudentUsername(extraId);
       targetPath = "/student/" + extraId;
     } else if (page === "blog-details" && extraId) {
-      setSelectedBlogSlug(extraId);
+       setSelectedBlogSlug(extraId);
       targetPath = "/blog/" + extraId;
     } else if (page === "blog") {
       targetPath = "/blog";
@@ -423,6 +429,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       targetPath = "/refund-policy";
     } else if (page === "affiliate") {
       targetPath = "/affiliate";
+    } else if (page === "influencer-promotion-policy") {
+      targetPath = "/influencer-promotion-policy";
     } else if (page === "cart") {
       targetPath = "/cart";
     } else if (page === "thank-you") {
@@ -440,7 +448,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     navigate(targetPath);
-  };
+  }, [navigate, setSelectedCourseSlug, setSelectedStudentUsername, setSelectedBlogSlug]);
 
   // Monitor theme
   useEffect(() => {

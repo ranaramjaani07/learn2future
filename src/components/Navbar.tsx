@@ -12,8 +12,10 @@ import {
   LayoutDashboard, 
   Sparkles,
   BookOpen,
-  ShoppingBag
+  ShoppingBag,
+  Search
 } from "lucide-react";
+import { GlobalSearch } from "./GlobalSearch";
 
 export const Navbar: React.FC = () => {
   const { 
@@ -36,6 +38,7 @@ export const Navbar: React.FC = () => {
   const [loginDropdownOpen, setLoginDropdownOpen] = useState(false);
   const [showNavbar, setShowNavbar] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -70,7 +73,7 @@ export const Navbar: React.FC = () => {
     <motion.header 
       animate={{ y: showNavbar ? 0 : -85 }}
       transition={{ duration: 0.35, ease: "easeInOut" }}
-      className="sticky top-0 z-50 w-full border-b transition-colors duration-300 backdrop-blur-md bg-brand-bg/85 dark:bg-[#000000]/90 border-neutral-200 dark:border-neutral-900"
+      className="sticky top-0 z-50 w-full border-b transition-colors duration-300 backdrop-blur-md bg-white/85 dark:bg-[#000000]/90 border-neutral-200 dark:border-neutral-900"
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
@@ -100,7 +103,7 @@ export const Navbar: React.FC = () => {
               </span>
             </div>
           </Link>
-
+ 
           {/* Desktop Navigation Link Cluster */}
           <nav className="hidden md:flex items-center space-x-8">
             {navItems.map((item) => {
@@ -127,10 +130,19 @@ export const Navbar: React.FC = () => {
               );
             })}
           </nav>
-
+ 
           {/* Right Action Stack */}
           <div className="hidden md:flex items-center space-x-4">
             
+            {/* Search Trigger Button */}
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="p-2.5 rounded-full text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+              aria-label="Open search"
+            >
+              <Search className="w-5 h-5" />
+            </button>
+ 
             {/* Theme Toggle Button */}
             <button
               onClick={() => setIsDarkMode(!isDarkMode)}
@@ -139,16 +151,16 @@ export const Navbar: React.FC = () => {
             >
               {isDarkMode ? <Sun className="w-5 h-5 text-brand-gold" /> : <Moon className="w-5 h-5 text-neutral-800" />}
             </button>
-
+ 
             {/* Cart Icon Button with Dynamic Counter Badge */}
             <button
               onClick={() => setCurrentPage("cart")}
-              className="relative p-2.5 rounded-full text-neutral-505 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-850 transition-colors flex items-center"
+              className="relative p-2.5 rounded-full text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-850 transition-colors flex items-center"
               aria-label="View shopping cart"
             >
               <ShoppingBag className="w-5 h-5" />
               {cart && cart.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-brand-gold text-black text-[9px] font-mono font-black rounded-full flex items-center justify-center border-2 border-brand-bg dark:border-black animate-bounce">
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-brand-gold text-black text-[9px] font-mono font-black rounded-full flex items-center justify-center border-2 border-white dark:border-black animate-bounce">
                   {cart.reduce((acum, val) => acum + (val.quantity || 1), 0)}
                 </span>
               )}
@@ -271,26 +283,6 @@ export const Navbar: React.FC = () => {
                         <span>Continue with Google</span>
                       </button>
                       <div className="h-px bg-neutral-100 dark:bg-neutral-900 my-1"></div>
-                      <button
-                        onClick={() => {
-                          setLoginDropdownOpen(false);
-                          loginAsDemoStudent();
-                        }}
-                        className="flex items-center space-x-2 w-full px-3 py-2.5 text-xs text-left font-bold text-neutral-900 dark:text-brand-gold hover:bg-neutral-100 dark:hover:bg-neutral-900 rounded-lg transition-colors cursor-pointer"
-                      >
-                        <UserIcon className="w-3.5 h-3.5" />
-                        <span>Demo Student Bypass</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setLoginDropdownOpen(false);
-                          loginAsDemoAdmin();
-                        }}
-                        className="flex items-center space-x-2 w-full px-3 py-2.5 text-xs text-left font-semibold text-zinc-500 hover:bg-neutral-100 dark:hover:bg-neutral-900 rounded-lg transition-colors cursor-pointer"
-                      >
-                        <LayoutDashboard className="w-3.5 h-3.5" />
-                        <span>Demo Admin Bypass</span>
-                      </button>
                     </div>
                   </div>
                 )}
@@ -300,6 +292,15 @@ export const Navbar: React.FC = () => {
 
           {/* Mobile Controller Cluster */}
           <div className="flex md:hidden items-center space-x-2">
+            {/* Mobile Search Button */}
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="p-2 rounded-full text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
+              aria-label="Open search dialog"
+            >
+              <Search className="w-5 h-5" />
+            </button>
+
             <button
               onClick={() => setIsDarkMode(!isDarkMode)}
               className="p-2 rounded-full text-neutral-500 dark:text-neutral-400"
@@ -311,12 +312,12 @@ export const Navbar: React.FC = () => {
             {/* Mobile Cart Icon Badge */}
             <button
               onClick={() => setCurrentPage("cart")}
-              className="relative p-2 text-neutral-505 dark:text-neutral-400 flex items-center"
+              className="relative p-2 text-neutral-500 dark:text-neutral-400 flex items-center"
               aria-label="View shopping cart"
             >
               <ShoppingBag className="w-5.5 h-5.5" />
               {cart && cart.length > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 bg-brand-gold text-black text-[8px] font-mono font-bold rounded-full flex items-center justify-center border-2 border-brand-bg dark:border-black">
+                <span className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 bg-brand-gold text-black text-[8px] font-mono font-bold rounded-full flex items-center justify-center border-2 border-white dark:border-black">
                   {cart.reduce((acum, val) => acum + (val.quantity || 1), 0)}
                 </span>
               )}
@@ -408,20 +409,12 @@ export const Navbar: React.FC = () => {
                 >
                   Sign In with Google
                 </button>
-                <button
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    loginAsDemoStudent();
-                  }}
-                  className="w-full text-center font-display text-sm font-semibold text-black bg-brand-gold px-4 py-3 rounded-lg cursor-pointer"
-                >
-                  Demo Student Bypass
-                </button>
               </div>
             )}
           </div>
         </div>
       )}
+      <GlobalSearch isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
     </motion.header>
   );
 };

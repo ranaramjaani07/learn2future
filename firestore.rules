@@ -110,12 +110,12 @@ service cloud.firestore {
     // 2. ORDERS
     // Vercel REST API (isServerCall) writes after payment — no auth token
     match /orders/{orderId} {
-      allow read: if isSignedIn() && (
+      allow read: if isServerCall() || (isSignedIn() && (
         resource.data.userId == request.auth.uid ||
         resource.data.email  == request.auth.token.email ||
         isAdmin()
-      );
-      allow list:           if isAdmin();
+      ));
+      allow list:           if isServerCall() || isAdmin();
       allow create, update: if isServerCall() || isAdmin();
       allow delete:         if isAdmin();
     }
@@ -130,7 +130,7 @@ service cloud.firestore {
 
     // 4. ADMINS
     match /admins/{adminUid} {
-      allow read:                   if isSignedIn();
+      allow read:                   if isServerCall() || isSignedIn();
       allow create, update, delete: if isAdmin();
     }
 
@@ -154,7 +154,7 @@ service cloud.firestore {
     // 6. SETTINGS
     // paymentGateway: ADMIN ONLY (contains Razorpay secret)
     match /settings/paymentGateway {
-      allow read, write: if isAdmin();
+      allow read, write: if isServerCall() || isAdmin();
     }
     match /settings/tracking {
       allow read:  if true;
@@ -169,7 +169,7 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     match /settings/{docId} {
-      allow read, write: if isAdmin();
+      allow read, write: if isServerCall() || isAdmin();
     }
 
     // 7. BLOGS
@@ -189,12 +189,12 @@ service cloud.firestore {
 
     // 9. ADMIN USERS
     match /adminUsers/{emailId} {
-      allow get: if isSignedIn() && request.auth.token.email != null && (
+      allow get: if isServerCall() || (isSignedIn() && request.auth.token.email != null && (
         request.auth.token.email.lower() == "digitalcoursesbay@gmail.com" ||
         request.auth.token.email.lower() == emailId.lower() ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-      );
-      allow list:   if isAdmin();
+      ));
+      allow list:   if isServerCall() || isAdmin();
       allow create: if isAdmin();
       allow delete: if isAdmin() && emailId.lower() != "digitalcoursesbay@gmail.com";
     }
@@ -246,22 +246,22 @@ service cloud.firestore {
     // 15. USER PURCHASES ← FIXED (was causing 403 after Razorpay payment)
     // Vercel verify-payment writes here → isServerCall() = true
     match /userPurchases/{purchaseId} {
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow list: if isAdmin();
+      allow read: if isServerCall() || (isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin()));
+      allow list: if isServerCall() || isAdmin();
       allow create, update: if isServerCall() || isAdmin();
       allow delete:         if isAdmin();
     }
 
     // 16. PAYMENT RECOVERY QUEUE
     match /paymentRecoveryQueue/{id} {
-      allow read:           if isAdmin();
+      allow read:           if isServerCall() || isAdmin();
       allow create, update: if isServerCall() || isAdmin();
       allow delete:         if isAdmin();
     }
 
     // 17. PAYMENT LOGS
     match /paymentLogs/{logId} {
-      allow read:           if isAdmin();
+      allow read:           if isServerCall() || isAdmin();
       allow create, update: if isServerCall() || isAdmin();
       allow delete:         if isAdmin();
     }

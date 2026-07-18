@@ -226,20 +226,6 @@ export const AdminLogin: React.FC = () => {
               </div>
             )}
 
-            <div className="relative my-3.5 flex py-1.5 items-center justify-center">
-              <div className="border-t border-neutral-200 dark:border-neutral-800 w-full absolute top-[50%]"></div>
-              <span className="bg-white dark:bg-[#151515] px-3 text-[10px] uppercase font-mono text-neutral-500 z-10 font-bold shrink-0">Demo / Developer Sandbox</span>
-            </div>
-
-            <button
-              type="button"
-              onClick={loginAsDemoAdmin}
-              className="w-full bg-brand-gold text-black hover:bg-[#F5B300]/95 h-12 rounded-xl text-xs font-display font-bold transition-all shadow-xl shadow-brand-gold/15 flex items-center justify-center space-x-2"
-            >
-              <ShieldCheck className="w-4 h-4 shrink-0" />
-              <span>Demo Admin Bypass Login</span>
-            </button>
-
             <button
               type="button"
               onClick={() => setCurrentPage("home")}

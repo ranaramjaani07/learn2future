@@ -1,15 +1,9 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { SEO } from "./SEO";
 import { Link } from "react-router-dom";
-import { useApp } from "../context/AppContext";
 import { ShieldCheck, HelpCircle, ArrowLeft, RefreshCw, Scale } from "lucide-react";
 
 export const RefundPolicy: React.FC = () => {
-  const { setCurrentPage } = useApp();
-
-  useEffect(() => {
-    setCurrentPage("refund-policy");
-  }, [setCurrentPage]);
 
   return (
     <div className="py-12 md:py-20 bg-neutral-50 dark:bg-[#000000] transition-colors duration-300">

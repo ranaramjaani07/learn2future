@@ -1,15 +1,9 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { SEO } from "./SEO";
 import { Link } from "react-router-dom";
-import { useApp } from "../context/AppContext";
 import { ShieldCheck, ArrowLeft, Award, Percent, DollarSign, Sparkles } from "lucide-react";
 
 export const AffiliateInfo: React.FC = () => {
-  const { setCurrentPage } = useApp();
-
-  useEffect(() => {
-    setCurrentPage("affiliate");
-  }, [setCurrentPage]);
 
   return (
     <div className="py-12 md:py-20 bg-neutral-50 dark:bg-[#000000] transition-colors duration-300">

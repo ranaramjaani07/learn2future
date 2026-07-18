@@ -1137,14 +1137,6 @@ ${course.title}
                         >
                           {loggingIn ? "Connecting Google..." : "Sign In & Progress"}
                         </button>
-                        <button
-                          onClick={() => {
-                            loginAsDemoStudent();
-                          }}
-                          className="bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 font-display font-semibold text-xs py-2.5 px-4 rounded-xl transition-colors w-full"
-                        >
-                          Demo Student Bypass (Iframe Safe)
-                        </button>
                       </div>
                       {loginError && (
                         <p className="text-[10px] text-red-500 font-mono leading-normal self-start border border-red-500/10 bg-red-500/5 p-2 rounded-lg w-full text-left">

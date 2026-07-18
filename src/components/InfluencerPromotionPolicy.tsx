@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { SEO } from "./SEO";
 import { Link } from "react-router-dom";
 import { useApp } from "../context/AppContext";
@@ -25,12 +25,8 @@ import {
 } from "lucide-react";
 
 export const InfluencerPromotionPolicy: React.FC = () => {
-  const { setCurrentPage, globalSettings } = useApp();
+  const { globalSettings } = useApp();
   const [copiedLink, setCopiedLink] = useState(false);
-
-  useEffect(() => {
-    setCurrentPage("influencer-promotion-policy");
-  }, [setCurrentPage]);
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href);
