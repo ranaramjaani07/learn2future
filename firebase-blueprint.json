@@ -812,6 +812,14 @@
     "/userPurchases/{purchaseId}": {
       "schema": "userPurchase",
       "description": "Successful purchase course enrollments index record"
+    },
+    "/chats/{chatId}": {
+      "schema": "chat",
+      "description": "Real-time student inquiry chat sessions and message logs"
+    },
+    "/chatbot/{docId}": {
+      "schema": "chatbotConfig",
+      "description": "AI Chatbot configuration and knowledge base settings"
     }
   }
 }

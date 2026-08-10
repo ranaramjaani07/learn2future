@@ -20,7 +20,8 @@ export const couponsService = {
       });
       return list;
     } catch (err) {
-      return handleFirestoreError(err, OperationType.LIST, "coupons");
+      handleFirestoreError(err, OperationType.LIST, "coupons");
+      return [];
     }
   },
 
@@ -32,7 +33,7 @@ export const couponsService = {
         createdAt: serverTimestamp()
       });
     } catch (err) {
-      return handleFirestoreError(err, OperationType.CREATE, `coupons/${code}`);
+      handleFirestoreError(err, OperationType.CREATE, `coupons/${code}`);
     }
   },
 
@@ -40,7 +41,7 @@ export const couponsService = {
     try {
       await deleteDoc(doc(db, "coupons", code));
     } catch (err) {
-      return handleFirestoreError(err, OperationType.DELETE, `coupons/${code}`);
+      handleFirestoreError(err, OperationType.DELETE, `coupons/${code}`);
     }
   }
 };

@@ -21,7 +21,8 @@ export const portfolioService = {
       });
       return list;
     } catch (err) {
-      return handleFirestoreError(err, OperationType.LIST, "student_portfolios");
+      handleFirestoreError(err, OperationType.LIST, "student_portfolios");
+      return [];
     }
   },
 
@@ -41,7 +42,8 @@ export const portfolioService = {
         return docRef.id;
       }
     } catch (err) {
-      return handleFirestoreError(err, id ? OperationType.UPDATE : OperationType.CREATE, id ? `${pathString}/${id}` : pathString);
+      handleFirestoreError(err, id ? OperationType.UPDATE : OperationType.CREATE, id ? `${pathString}/${id}` : pathString);
+      return "";
     }
   },
 
@@ -49,7 +51,7 @@ export const portfolioService = {
     try {
       await deleteDoc(doc(db, "student_portfolios", id));
     } catch (err) {
-      return handleFirestoreError(err, OperationType.DELETE, `student_portfolios/${id}`);
+      handleFirestoreError(err, OperationType.DELETE, `student_portfolios/${id}`);
     }
   }
 };

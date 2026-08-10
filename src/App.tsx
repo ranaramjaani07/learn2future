@@ -15,7 +15,7 @@ const Courses = React.lazy(() => import("./components/Courses").then(m => ({ def
 const About = React.lazy(() => import("./components/About").then(m => ({ default: m.About })));
 const Contact = React.lazy(() => import("./components/Contact").then(m => ({ default: m.Contact })));
 const AdminLogin = React.lazy(() => import("./components/AdminLogin").then(m => ({ default: m.AdminLogin })));
-const AdminDashboard = React.lazy(() => import("./components/AdminDashboard").then(m => ({ default: m.AdminDashboard })));
+const AdminDashboard = React.lazy(() => import("./components/AdminDashboard").then(m => ({ default: m.AdminDashboard || m.default })));
 const MyEnrollments = React.lazy(() => import("./components/MyEnrollments").then(m => ({ default: m.MyEnrollments })));
 const Blog = React.lazy(() => import("./components/Blog").then(m => ({ default: m.Blog })));
 const BlogDetails = React.lazy(() => import("./components/BlogDetails").then(m => ({ default: m.BlogDetails })));
@@ -204,6 +204,7 @@ const MainLayout: React.FC = () => {
               <Routes location={routerLocation}>
                 <Route path="/" element={<Home />} />
                 <Route path="/courses" element={<Courses />} />
+                <Route path="/courses/:categorySlug" element={<Courses />} />
                 <Route path="/course/:slug" element={<CourseLandingPage />} />
                 <Route path="/about" element={<About />} />
                 <Route path="/contact" element={<Contact />} />
@@ -352,7 +353,7 @@ const MainLayout: React.FC = () => {
 
       {/* Toast Notification */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom duration-300">
+        <div className="fixed bottom-24 right-6 z-50 animate-in slide-in-from-bottom duration-300">
           <div className={`px-5 py-3.5 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.5)] border ${
             toast.type === "success" 
               ? "bg-[#0b0c0a] border-emerald-500/30 text-emerald-400" 
@@ -382,12 +383,14 @@ const MainLayout: React.FC = () => {
 };
 
 import { TrackingManager } from "./components/TrackingManager";
+import { L2FChatbot } from "./components/chatbot/L2FChatbot";
 
 export default function App() {
   return (
     <AppProvider>
       <TrackingManager />
       <MainLayout />
+      <L2FChatbot />
     </AppProvider>
   );
 }

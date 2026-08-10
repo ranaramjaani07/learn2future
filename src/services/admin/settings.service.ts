@@ -12,7 +12,8 @@ export const settingsService = {
       const snap = await getDoc(doc(db, "settings", "tracking"));
       return snap.exists() ? snap.data() : null;
     } catch (err) {
-      return handleFirestoreError(err, OperationType.GET, "settings/tracking");
+      handleFirestoreError(err, OperationType.GET, "settings/tracking");
+      return null;
     }
   },
 
@@ -21,7 +22,7 @@ export const settingsService = {
       const docRef = doc(db, "settings", "tracking");
       await setDoc(docRef, data, { merge: true });
     } catch (err) {
-      return handleFirestoreError(err, OperationType.WRITE, "settings/tracking");
+      handleFirestoreError(err, OperationType.WRITE, "settings/tracking");
     }
   },
 
@@ -30,7 +31,8 @@ export const settingsService = {
       const snap = await getDoc(doc(db, "settings", "paymentGateway"));
       return snap.exists() ? snap.data() : null;
     } catch (err) {
-      return handleFirestoreError(err, OperationType.GET, "settings/paymentGateway");
+      handleFirestoreError(err, OperationType.GET, "settings/paymentGateway");
+      return null;
     }
   },
 
@@ -39,7 +41,7 @@ export const settingsService = {
       const docRef = doc(db, "settings", "paymentGateway");
       await setDoc(docRef, data, { merge: true });
     } catch (err) {
-      return handleFirestoreError(err, OperationType.WRITE, "settings/paymentGateway");
+      handleFirestoreError(err, OperationType.WRITE, "settings/paymentGateway");
     }
   },
 
@@ -48,7 +50,8 @@ export const settingsService = {
       const snap = await getDoc(doc(db, "settings", "homepageSettings"));
       return snap.exists() ? snap.data() : null;
     } catch (err) {
-      return handleFirestoreError(err, OperationType.GET, "settings/homepageSettings");
+      handleFirestoreError(err, OperationType.GET, "settings/homepageSettings");
+      return null;
     }
   },
 
@@ -57,7 +60,7 @@ export const settingsService = {
       const docRef = doc(db, "settings", "homepageSettings");
       await setDoc(docRef, data, { merge: true });
     } catch (err) {
-      return handleFirestoreError(err, OperationType.WRITE, "settings/homepageSettings");
+      handleFirestoreError(err, OperationType.WRITE, "settings/homepageSettings");
     }
   }
 };

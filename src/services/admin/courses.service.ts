@@ -23,7 +23,8 @@ export const coursesService = {
       });
       return list;
     } catch (err) {
-      return handleFirestoreError(err, OperationType.LIST, "courses");
+      handleFirestoreError(err, OperationType.LIST, "courses");
+      return [];
     }
   },
 
@@ -43,7 +44,8 @@ export const coursesService = {
         return docRef.id;
       }
     } catch (err) {
-      return handleFirestoreError(err, courseId ? OperationType.UPDATE : OperationType.CREATE, courseId ? `${pathString}/${courseId}` : pathString);
+      handleFirestoreError(err, courseId ? OperationType.UPDATE : OperationType.CREATE, courseId ? `${pathString}/${courseId}` : pathString);
+      return "";
     }
   },
 
@@ -51,7 +53,7 @@ export const coursesService = {
     try {
       await deleteDoc(doc(db, "courses", courseId));
     } catch (err) {
-      return handleFirestoreError(err, OperationType.DELETE, `courses/${courseId}`);
+      handleFirestoreError(err, OperationType.DELETE, `courses/${courseId}`);
     }
   },
 
@@ -64,7 +66,7 @@ export const coursesService = {
         });
       }
     } catch (err) {
-      return handleFirestoreError(err, OperationType.CREATE, "courses/seed");
+      handleFirestoreError(err, OperationType.CREATE, "courses/seed");
     }
   }
 };

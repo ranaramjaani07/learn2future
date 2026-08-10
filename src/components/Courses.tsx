@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { 
   Search, 
@@ -9,56 +9,59 @@ import {
   CheckCircle, 
   X, 
   Copy,
-  ChevronLeft, 
-  ChevronRight, 
   CreditCard, 
-  Volume2, 
   ArrowRight,
   Sparkles,
   Info,
   QrCode,
-  FileText,
-  ShoppingBag,
   Share2
 } from "lucide-react";
-import { collection, getDocs, addDoc, serverTimestamp, query, orderBy, doc, getDoc } from "firebase/firestore";
+import { collection, getDocs, addDoc, serverTimestamp, query, orderBy, doc, getDoc, limit, where, startAfter, DocumentSnapshot } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage, handleFirestoreError, OperationType } from "../firebase";
-import { Course, Order } from "../types";
+import { Course } from "../types";
 import { SEO } from "./SEO";
+import { categoryToSlug, slugToCategory, getCategoryMetadata, DEFAULT_CATEGORIES } from "../lib/categoryUtils";
 
 export const Courses: React.FC = () => {
   const navigate = useNavigate();
+  const { categorySlug } = useParams<{ categorySlug?: string }>();
+  const [searchParams] = useSearchParams();
+
   const { 
     user, 
     loginWithGoogle, 
-    loginAsDemoStudent,
     globalSettings, 
     logUserActivity, 
-    addToCart, 
-    isSetupComplete, 
-    setAuthModalOpen, 
-    setAuthModalMessage,
     setCurrentPage,
     hasPurchasedCourse,
     showToast,
     urlCourseSlug,
     setUrlCourseSlug,
-    urlReferrerId,
-    setUrlReferrerId
+    urlReferrerId
   } = useApp();
-  
-  // States for Courses list
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  // Category & Route Resolver State
+  const categories = DEFAULT_CATEGORIES;
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [isInvalidCategory, setIsInvalidCategory] = useState<boolean>(false);
+
+  // Search filter term
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All");
 
-  // Pagination state
-  const [currentPageNo, setCurrentPageNo] = useState(1);
-  const coursesPerPage = 6;
+  // Infinite Scroll & Cursor Pagination States
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loadingInitial, setLoadingInitial] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [errorLoadingMore, setErrorLoadingMore] = useState(false);
+  const [pageNumber, setPageNumber] = useState(1);
 
-  // Selected course for purchase
+  const lastDocRef = useRef<DocumentSnapshot | null>(null);
+  const isFetchingRef = useRef<boolean>(false);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Selected course for purchase modal
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   
   // Purchase modal form state
@@ -78,224 +81,6 @@ export const Courses: React.FC = () => {
   // Sharing System states
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [courseToShare, setCourseToShare] = useState<Course | null>(null);
-
-  // Track referral CTR clicks on landing/load
-  const trackReferralClick = async (courseId: string, courseName: string, referrerId: string | null) => {
-    if (!referrerId) return;
-    try {
-      const sessionKey = `ref_click_${courseId}_${referrerId}`;
-      if (sessionStorage.getItem(sessionKey)) return; // prevent duplicate clicks per session on reload
-      sessionStorage.setItem(sessionKey, "true");
-
-      await addDoc(collection(db, "courseReferrals"), {
-        courseId,
-        courseName,
-        referrerId,
-        clickedUserId: user?.uid || "anonymous",
-        createdAt: serverTimestamp()
-      });
-      console.log(`Referral click tracked successfully for referrer "${referrerId}" on course "${courseName}"`);
-    } catch (err) {
-      console.error("Failed to track referral click in firestore:", err);
-    }
-  };
-
-  // Log share events inside Firebase
-  const logShareToFirestore = async (course: Course, platform: string, shareUrl: string) => {
-    try {
-      await addDoc(collection(db, "courseShares"), {
-        courseId: course.id,
-        courseName: course.title,
-        userId: user?.uid || "anonymous",
-        platform: platform,
-        shareUrl: shareUrl,
-        createdAt: serverTimestamp()
-      });
-      
-      if (logUserActivity) {
-        await logUserActivity("Course Shared" as any, `Shared course "${course.title}" on platform: ${platform}`);
-      }
-    } catch (err) {
-      console.error("Failed to log sharing event to Firestore:", err);
-    }
-  };
-
-  // Handle share button clicks with auto-detection of platform and fallback modal
-  const handleShareClick = async (course: Course) => {
-    const slug = course.slug || course.id;
-    const referrerId = user?.uid || "";
-    const refSuffix = referrerId ? `?ref=${referrerId}` : "";
-    const shareUrl = `${window.location.origin}/course/${slug}${refSuffix}`;
-    const shareText = `🚀 Check out this amazing course:
-
-${course.title}
-
-💰 Price: ₹${course.price.toLocaleString("en-IN") || course.price}
-📚 Category: ${course.category}
-
-🎯 Learn valuable skills and upgrade yourself!
-
-🔗 Link: ${shareUrl}`;
-
-    if (navigator.share && /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent)) {
-      try {
-        await navigator.share({
-          title: course.title,
-          text: shareText,
-          url: shareUrl
-        });
-        await logShareToFirestore(course, "nativeshare", shareUrl);
-        showToast("Course link shared successfully!", "success");
-      } catch (err) {
-        console.warn("Native share cancelled or failed: ", err);
-        setCourseToShare(course);
-        setShareModalOpen(true);
-      }
-    } else {
-      setCourseToShare(course);
-      setShareModalOpen(true);
-    }
-  };
-
-  // Listen for deep-linked course URL on load and set up selectedCourse
-  useEffect(() => {
-    if (courses.length > 0 && urlCourseSlug) {
-      const found = courses.find((c) => c.slug === urlCourseSlug || c.id === urlCourseSlug);
-      if (found) {
-        setSelectedCourse(found);
-        
-        // Navigate to the proper SEO-friendly URL via React Router (fixes refresh/direct-URL 404s)
-        navigate(`/course/${found.slug || found.id}${urlReferrerId ? `?ref=${urlReferrerId}` : ""}`, { replace: true });
-
-        // Track referral CTR clicks on landing/load
-        if (urlReferrerId) {
-          trackReferralClick(found.id, found.title, urlReferrerId);
-        }
-      }
-      // Reset deep link state to prevent multiple prompts on navigate
-      setUrlCourseSlug(null);
-    }
-  }, [courses, urlCourseSlug]);
-
-  const handleOpenPurchase = (course: Course) => {
-    setSelectedCourse(course);
-    navigate(`/course/${course.slug || course.id}`);
-    if (logUserActivity) {
-      logUserActivity("Checkout Initiated", course.title);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setLoginError("");
-    setLoggingIn(true);
-    try {
-      await loginWithGoogle();
-    } catch (err: any) {
-      console.error("Courses login error:", err);
-      const msg = err?.message || "";
-      if (err?.code === "auth/popup-blocked" || msg.includes("popup-blocked") || msg.includes("blocked")) {
-        setLoginError("Pop-up Blocked: please allow pop-ups or open app in a new tab.");
-      } else if (err?.code === "auth/cancelled-popup-request" || msg.includes("cancelled-popup-request") || msg.includes("cancelled")) {
-        setLoginError("Sign-In Cancelled.");
-      } else {
-        setLoginError(`Sign-In failed: ${err?.message || String(err)}`);
-      }
-    } finally {
-      setLoggingIn(false);
-    }
-  };
-
-  // Promo & Coupon States
-  const [couponInput, setCouponInput] = useState("");
-  const [appliedCoupon, setAppliedCoupon] = useState<any | null>(null);
-  const [couponError, setCouponError] = useState<string | null>(null);
-  const [couponSuccess, setCouponSuccess] = useState(false);
-  const [couponLoading, setCouponLoading] = useState(false);
-
-  // Prefill user details when they pick a course
-  useEffect(() => {
-    if (selectedCourse && user) {
-      setOrderName(user.displayName || "");
-      setOrderEmail(user.email || "");
-    }
-  }, [selectedCourse, user]);
-
-  const handleApplyCoupon = async () => {
-    if (!couponInput.trim() || !selectedCourse) return;
-    setCouponLoading(true);
-    setCouponError(null);
-    setCouponSuccess(false);
-
-    const formattedCode = couponInput.trim().toUpperCase();
-
-    try {
-      const couponDocRef = doc(db, "coupons", formattedCode);
-      const docSnap = await getDoc(couponDocRef);
-
-      if (!docSnap.exists()) {
-        setCouponError("Invalid promo code or expired coupon.");
-        setAppliedCoupon(null);
-        return;
-      }
-
-      const couponData = docSnap.data();
-
-      if (!couponData.isActive) {
-        setCouponError("This promo code is currently disabled.");
-        setAppliedCoupon(null);
-        return;
-      }
-
-      if (couponData.minOrderValue && selectedCourse) {
-        if (selectedCourse.price < couponData.minOrderValue) {
-          setCouponError(`Minimum course price of ₹${couponData.minOrderValue} is required to apply this coupon.`);
-          setAppliedCoupon(null);
-          return;
-        }
-      }
-
-      if (couponData.expiresAt) {
-        const expiryDate = new Date(couponData.expiresAt);
-        if (expiryDate.getTime() < Date.now()) {
-          setCouponError("This promo code has expired.");
-          setAppliedCoupon(null);
-          return;
-        }
-      }
-
-      setAppliedCoupon({ id: docSnap.id, ...couponData });
-      setCouponSuccess(true);
-      setCouponError(null);
-    } catch (err) {
-      console.error("Lookup coupon failed:", err);
-      setCouponError("Failed to apply promo code. Please try again.");
-    } finally {
-      setCouponLoading(false);
-    }
-  };
-
-  const getDiscountedPrice = () => {
-    if (!selectedCourse) return 0;
-    if (!appliedCoupon) return selectedCourse.price;
-
-    if (appliedCoupon.type === "percentage") {
-      const discount = (selectedCourse.price * appliedCoupon.value) / 100;
-      return Math.max(0, Math.round(selectedCourse.price - discount));
-    } else {
-      return Math.max(0, selectedCourse.price - appliedCoupon.value);
-    }
-  };
-
-  const getDiscountValue = () => {
-    if (!selectedCourse || !appliedCoupon) return 0;
-    if (appliedCoupon.type === "percentage") {
-      return Math.round((selectedCourse.price * appliedCoupon.value) / 100);
-    } else {
-      return appliedCoupon.value;
-    }
-  };
-
-  const upiId = globalSettings.upiId;
 
   // Fallback items to show if database is empty
   const defaultCourses: Course[] = [
@@ -355,108 +140,378 @@ ${course.title}
     }
   ];
 
-  const categories = ["All", "AI Tools", "Video Editing", "Digital Marketing", "YouTube Growth", "Freelancing", "Business", "Self Improvement"];
-
-  // Fetch courses from Firestore on mount with real-time updates
+  // Resolve active category from URL parameter
   useEffect(() => {
-    // ── FIXED: One-time getDocs with 15-min cache instead of persistent onSnapshot ──
-    setLoading(true);
-    let cancelled = false;
-    const CACHE_KEY = "courses_list_cache";
-    const CACHE_TTL = 15 * 60 * 1000;
-
-    async function fetchCourses() {
-      // Serve from cache first for instant render
-      try {
-        const stored = localStorage.getItem(CACHE_KEY);
-        if (stored) {
-          const { ts, data } = JSON.parse(stored);
-          if (Date.now() - ts < CACHE_TTL) {
-            if (!cancelled) {
-              setCourses(data.length > 0 ? data : defaultCourses);
-              setLoading(false);
-            }
-            return;
-          }
-          // Show stale cache while refreshing
-          if (!cancelled && data.length > 0) setCourses(data);
-        }
-      } catch (_) {}
-
-      try {
-        const snapshot = await getDocs(query(collection(db, "courses"), orderBy("createdAt", "desc")));
-        if (cancelled) return;
-        const docsList: Course[] = [];
-        snapshot.forEach((docSnap) => docsList.push({ id: docSnap.id, ...docSnap.data() } as Course));
-        const result = docsList.length > 0 ? docsList : defaultCourses;
-        setCourses(result);
-        if (docsList.length > 0) {
-          localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: docsList }));
-        }
-      } catch (err) {
-        if (!cancelled) {
-          console.warn("[Courses] Fetch failed, using default:", err);
-          setCourses(defaultCourses);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
+    if (categorySlug) {
+      const resolved = slugToCategory(categorySlug, categories);
+      if (resolved) {
+        setSelectedCategory(resolved);
+        setIsInvalidCategory(false);
+      } else {
+        setIsInvalidCategory(true);
       }
+    } else {
+      setSelectedCategory("All");
+      setIsInvalidCategory(false);
     }
+  }, [categorySlug, categories]);
 
-    fetchCourses();
-    return () => { cancelled = true; };
-  }, []);
+  // Track referral CTR clicks on landing/load
+  const trackReferralClick = async (courseId: string, courseName: string, referrerId: string | null) => {
+    if (!referrerId) return;
+    try {
+      const sessionKey = `ref_click_${courseId}_${referrerId}`;
+      if (sessionStorage.getItem(sessionKey)) return;
+      sessionStorage.setItem(sessionKey, "true");
 
-  // Prepopulate client order profile once logged in
-  useEffect(() => {
-    if (user) {
-      setOrderName(user.displayName || "");
-      setOrderEmail(user.email || "");
-    }
-  }, [user]);
-
-  // Handle Search and Filter logic
-  const filteredCourses = courses.filter((course) => {
-    const cTitle = course.title || "";
-    const cCategory = course.category || "";
-    const cDescription = course.description || "";
-    
-    const sTerm = searchTerm.toLowerCase();
-
-    const matchesSearch = 
-      cTitle.toLowerCase().includes(sTerm) ||
-      cCategory.toLowerCase().includes(sTerm) ||
-      cDescription.toLowerCase().includes(sTerm);
-
-    const matchesCategory = 
-      selectedCategory === "All" || 
-      cCategory.trim().toLowerCase() === selectedCategory.trim().toLowerCase();
-
-    return matchesSearch && matchesCategory;
-  });
-
-  // Pagination logic boundaries
-  const totalCourses = filteredCourses.length;
-  const indexOfLastCourse = currentPageNo * coursesPerPage;
-  const indexOfFirstCourse = indexOfLastCourse - coursesPerPage;
-  const currentCoursesSlice = filteredCourses.slice(indexOfFirstCourse, indexOfLastCourse);
-  const totalPages = Math.ceil(totalCourses / coursesPerPage);
-
-  const handlePageChange = (pageNo: number) => {
-    if (pageNo >= 1 && pageNo <= totalPages) {
-      setCurrentPageNo(pageNo);
-      window.scrollTo({ top: 300, behavior: "smooth" });
+      await addDoc(collection(db, "courseReferrals"), {
+        courseId,
+        courseName,
+        referrerId,
+        clickedUserId: user?.uid || "anonymous",
+        createdAt: serverTimestamp()
+      });
+    } catch (err) {
+      console.error("Failed to track referral click in firestore:", err);
     }
   };
 
-  // UPI Copy helper
+  // Log share events inside Firebase
+  const logShareToFirestore = async (course: Course, platform: string, shareUrl: string) => {
+    try {
+      await addDoc(collection(db, "courseShares"), {
+        courseId: course.id,
+        courseName: course.title,
+        userId: user?.uid || "anonymous",
+        platform: platform,
+        shareUrl: shareUrl,
+        createdAt: serverTimestamp()
+      });
+      
+      if (logUserActivity) {
+        await logUserActivity("Course Shared" as any, `Shared course "${course.title}" on platform: ${platform}`);
+      }
+    } catch (err) {
+      console.error("Failed to log sharing event to Firestore:", err);
+    }
+  };
+
+  // Handle share button clicks
+  const handleShareClick = async (course: Course) => {
+    const slug = course.slug || course.id;
+    const referrerId = user?.uid || "";
+    const refSuffix = referrerId ? `?ref=${referrerId}` : "";
+    const shareUrl = `${window.location.origin}/course/${slug}${refSuffix}`;
+    const shareText = `🚀 Check out this amazing course:
+
+${course.title}
+
+💰 Price: ₹${course.price.toLocaleString("en-IN") || course.price}
+📚 Category: ${course.category}
+
+🎯 Learn valuable skills and upgrade yourself!
+
+🔗 Link: ${shareUrl}`;
+
+    if (navigator.share && /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent)) {
+      try {
+        await navigator.share({
+          title: course.title,
+          text: shareText,
+          url: shareUrl
+        });
+        await logShareToFirestore(course, "nativeshare", shareUrl);
+        showToast("Course link shared successfully!", "success");
+      } catch (err) {
+        setCourseToShare(course);
+        setShareModalOpen(true);
+      }
+    } else {
+      setCourseToShare(course);
+      setShareModalOpen(true);
+    }
+  };
+
+  // Listen for deep-linked course URL on load and navigate cleanly
+  useEffect(() => {
+    if (courses.length > 0 && urlCourseSlug) {
+      const found = courses.find((c) => c.slug === urlCourseSlug || c.id === urlCourseSlug);
+      if (found) {
+        setSelectedCourse(found);
+        navigate(`/course/${found.slug || found.id}${urlReferrerId ? `?ref=${urlReferrerId}` : ""}`, { replace: true });
+
+        if (urlReferrerId) {
+          trackReferralClick(found.id, found.title, urlReferrerId);
+        }
+      }
+      setUrlCourseSlug(null);
+    }
+  }, [courses, urlCourseSlug]);
+
+  // Fetch initial 6 courses for current category
+  const fetchInitialCourses = useCallback(async (catName: string) => {
+    setLoadingInitial(true);
+    setErrorLoadingMore(false);
+    setLoadingMore(false);
+    setCourses([]);
+    lastDocRef.current = null;
+    isFetchingRef.current = false;
+    setPageNumber(1);
+
+    try {
+      let q;
+      if (catName === "All") {
+        q = query(collection(db, "courses"), orderBy("createdAt", "desc"), limit(6));
+      } else {
+        q = query(collection(db, "courses"), where("category", "==", catName), limit(6));
+      }
+
+      const snapshot = await getDocs(q);
+      const docs = snapshot.docs;
+      const docsList: Course[] = docs.map((docSnap) => {
+        return Object.assign({ id: docSnap.id }, docSnap.data()) as Course;
+      });
+
+      if (docs.length > 0) {
+        lastDocRef.current = docs[docs.length - 1];
+        setHasMore(docs.length === 6);
+        setCourses(docsList);
+      } else {
+        const filtered = catName === "All"
+          ? defaultCourses
+          : defaultCourses.filter(c => c.category.toLowerCase() === catName.toLowerCase());
+        setCourses(filtered.slice(0, 6));
+        setHasMore(filtered.length > 6);
+      }
+    } catch (err) {
+      console.warn("[Courses] Fetch initial error, using fallback dataset:", err);
+      const filtered = catName === "All"
+        ? defaultCourses
+        : defaultCourses.filter(c => c.category.toLowerCase() === catName.toLowerCase());
+      setCourses(filtered.slice(0, 6));
+      setHasMore(filtered.length > 6);
+    } finally {
+      setLoadingInitial(false);
+    }
+  }, []);
+
+  // Fetch next batch of 6 courses
+  const fetchMoreCourses = useCallback(async () => {
+    if (isFetchingRef.current || !hasMore || loadingInitial || loadingMore) return;
+
+    isFetchingRef.current = true;
+    setLoadingMore(true);
+    setErrorLoadingMore(false);
+
+    try {
+      let newDocsList: Course[] = [];
+
+      if (lastDocRef.current) {
+        let q;
+        if (selectedCategory === "All") {
+          q = query(
+            collection(db, "courses"),
+            orderBy("createdAt", "desc"),
+            startAfter(lastDocRef.current),
+            limit(6)
+          );
+        } else {
+          q = query(
+            collection(db, "courses"),
+            where("category", "==", selectedCategory),
+            startAfter(lastDocRef.current),
+            limit(6)
+          );
+        }
+
+        const snapshot = await getDocs(q);
+        const docs = snapshot.docs;
+        newDocsList = docs.map((docSnap) => {
+          return Object.assign({ id: docSnap.id }, docSnap.data()) as Course;
+        });
+
+        if (docs.length > 0) {
+          lastDocRef.current = docs[docs.length - 1];
+        }
+        setHasMore(docs.length === 6);
+      } else {
+        const filtered = selectedCategory === "All"
+          ? defaultCourses
+          : defaultCourses.filter(c => c.category.toLowerCase() === selectedCategory.toLowerCase());
+        const offset = courses.length;
+        newDocsList = filtered.slice(offset, offset + 6);
+        setHasMore(offset + newDocsList.length < filtered.length);
+      }
+
+      if (newDocsList.length > 0) {
+        setCourses((prev) => {
+          const existingIds = new Set(prev.map((c) => c.id));
+          const unique = newDocsList.filter((c) => !existingIds.has(c.id));
+          return [...prev, ...unique];
+        });
+
+        setPageNumber((prevPage) => {
+          const nextPage = prevPage + 1;
+          const currentUrl = new URL(window.location.href);
+          currentUrl.searchParams.set("page", String(nextPage));
+          window.history.replaceState({}, "", currentUrl.toString());
+          return nextPage;
+        });
+      } else {
+        setHasMore(false);
+      }
+    } catch (err) {
+      console.error("[Courses] Error fetching more courses:", err);
+      setErrorLoadingMore(true);
+    } finally {
+      setLoadingMore(false);
+      isFetchingRef.current = false;
+    }
+  }, [hasMore, loadingInitial, loadingMore, selectedCategory, courses.length]);
+
+  // Effect to load initial batch on category change
+  useEffect(() => {
+    if (!isInvalidCategory) {
+      fetchInitialCourses(selectedCategory);
+    }
+  }, [selectedCategory, isInvalidCategory, fetchInitialCourses]);
+
+  // IntersectionObserver effect for infinite scrolling
+  useEffect(() => {
+    const sentinelEl = sentinelRef.current;
+    if (!sentinelEl || !hasMore || loadingInitial || loadingMore || errorLoadingMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !isFetchingRef.current && hasMore) {
+          fetchMoreCourses();
+        }
+      },
+      { rootMargin: "400px" }
+    );
+
+    observer.observe(sentinelEl);
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasMore, loadingInitial, loadingMore, errorLoadingMore, fetchMoreCourses]);
+
+  // Google Sign In Handler
+  const handleGoogleLogin = async () => {
+    setLoginError("");
+    setLoggingIn(true);
+    try {
+      await loginWithGoogle();
+    } catch (err: any) {
+      const msg = err?.message || "";
+      if (err?.code === "auth/popup-blocked" || msg.includes("popup-blocked") || msg.includes("blocked")) {
+        setLoginError("Pop-up Blocked: please allow pop-ups or open app in a new tab.");
+      } else if (err?.code === "auth/cancelled-popup-request" || msg.includes("cancelled-popup-request") || msg.includes("cancelled")) {
+        setLoginError("Sign-In Cancelled.");
+      } else {
+        setLoginError(`Sign-In failed: ${err?.message || String(err)}`);
+      }
+    } finally {
+      setLoggingIn(false);
+    }
+  };
+
+  // Promo & Coupon States
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<any | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponSuccess, setCouponSuccess] = useState(false);
+  const [couponLoading, setCouponLoading] = useState(false);
+
+  useEffect(() => {
+    if (selectedCourse && user) {
+      setOrderName(user.displayName || "");
+      setOrderEmail(user.email || "");
+    }
+  }, [selectedCourse, user]);
+
+  const handleApplyCoupon = async () => {
+    if (!couponInput.trim() || !selectedCourse) return;
+    setCouponLoading(true);
+    setCouponError(null);
+    setCouponSuccess(false);
+
+    const formattedCode = couponInput.trim().toUpperCase();
+
+    try {
+      const couponDocRef = doc(db, "coupons", formattedCode);
+      const docSnap = await getDoc(couponDocRef);
+
+      if (!docSnap.exists()) {
+        setCouponError("Invalid promo code or expired coupon.");
+        setAppliedCoupon(null);
+        return;
+      }
+
+      const couponData = docSnap.data();
+
+      if (!couponData.isActive) {
+        setCouponError("This promo code is currently disabled.");
+        setAppliedCoupon(null);
+        return;
+      }
+
+      if (couponData.minOrderValue && selectedCourse) {
+        if (selectedCourse.price < couponData.minOrderValue) {
+          setCouponError(`Minimum course price of ₹${couponData.minOrderValue} is required to apply this coupon.`);
+          setAppliedCoupon(null);
+          return;
+        }
+      }
+
+      if (couponData.expiresAt) {
+        const expiryDate = new Date(couponData.expiresAt);
+        if (expiryDate.getTime() < Date.now()) {
+          setCouponError("This promo code has expired.");
+          setAppliedCoupon(null);
+          return;
+        }
+      }
+
+      setAppliedCoupon({ id: docSnap.id, ...couponData });
+      setCouponSuccess(true);
+      setCouponError(null);
+    } catch (err) {
+      setCouponError("Failed to apply promo code. Please try again.");
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const getDiscountedPrice = () => {
+    if (!selectedCourse) return 0;
+    if (!appliedCoupon) return selectedCourse.price;
+
+    if (appliedCoupon.type === "percentage") {
+      const discount = (selectedCourse.price * appliedCoupon.value) / 100;
+      return Math.max(0, Math.round(selectedCourse.price - discount));
+    } else {
+      return Math.max(0, selectedCourse.price - appliedCoupon.value);
+    }
+  };
+
+  const getDiscountValue = () => {
+    if (!selectedCourse || !appliedCoupon) return 0;
+    if (appliedCoupon.type === "percentage") {
+      return Math.round((selectedCourse.price * appliedCoupon.value) / 100);
+    } else {
+      return appliedCoupon.value;
+    }
+  };
+
+  const upiId = globalSettings.upiId;
+
   const handleCopyUPI = () => {
     navigator.clipboard.writeText(upiId);
     setCopySuccess(true);
     setTimeout(() => setCopySuccess(false), 2000);
   };
 
-  // Helper to compress images on client side to prevent excessively large payload writes
   const compressImage = (base64Str: string, maxWidth = 800, maxHeight = 800, quality = 0.8): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
@@ -495,7 +550,6 @@ ${course.title}
     });
   };
 
-  // Helper to convert base64 back to a Blob or File for Storage upload
   const base64ToBlob = (base64Str: string): Blob => {
     try {
       const parts = base64Str.split(";base64,");
@@ -508,17 +562,13 @@ ${course.title}
       }
       return new Blob([uInt8Array], { type: contentType });
     } catch (e) {
-      console.warn("base64ToBlob failure, returning small empty blob", e);
       return new Blob([], { type: "image/jpeg" });
     }
   };
 
-  // Image Selection and convert to base64 preview
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      
-      // Strict layout and type validation for file: jpg, jpeg, png
       const fileExt = file.name.split('.').pop()?.toLowerCase() || "";
       const allowedExtensions = ["jpg", "jpeg", "png"];
       const allowedMimeTypes = ["image/jpeg", "image/png", "image/jpg"];
@@ -531,8 +581,7 @@ ${course.title}
         return;
       }
 
-      // Check for size limit of 2MB max
-      const maxBytes = 2 * 1024 * 1024; // 2MB
+      const maxBytes = 2 * 1024 * 1024;
       if (file.size > maxBytes) {
         setErrorNotice(`The chosen image file is too large (${(file.size / (1024 * 1024)).toFixed(2)}MB). Maximum allowed size is 2MB.`);
         setScreenshotFile(null);
@@ -547,15 +596,11 @@ ${course.title}
       reader.onloadend = async () => {
         const rawBase64 = reader.result as string;
         try {
-          // Compress on-the-fly to max width 800px to ensure tiny sizes (< 100KB)
           const compressedBase64 = await compressImage(rawBase64, 800, 800, 0.75);
           setScreenshotPreview(compressedBase64);
-          
-          // Convert optimized base64 back to Blob for standard Firebase Storage upload
           const optimizedBlob = base64ToBlob(compressedBase64);
           setScreenshotFile(optimizedBlob as any);
         } catch (err) {
-          console.error("Compression flow error, falling back to original file", err);
           setScreenshotFile(file);
           setScreenshotPreview(rawBase64);
         }
@@ -564,7 +609,6 @@ ${course.title}
     }
   };
 
-  // Submit checkout order
   const handleCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
@@ -589,7 +633,6 @@ ${course.title}
       let downloadURL = "";
 
       try {
-        // 1. Upload screenshot to Firebase Storage using uploadBytesResumable
         if (screenshotFile && screenshotFile.size > 2 * 1024 * 1024) {
           throw new Error("File exceeds 2MB limit.");
         }
@@ -599,7 +642,6 @@ ${course.title}
         const storageRef = ref(storage, `orders/${user.uid}_${timestamp}_screenshot.${extension}`);
         
         setUploadProgress(0);
-        
         const uploadTask = uploadBytesResumable(storageRef, screenshotFile as Blob);
         
         await Promise.race([
@@ -612,22 +654,14 @@ ${course.title}
                 );
                 setUploadProgress(progress);
               },
-              (error) => {
-                rejectPromise(error);
-              },
-              () => {
-                resolvePromise();
-              }
+              (error) => rejectPromise(error),
+              () => resolvePromise()
             );
           }),
           new Promise<void>((_, rejectPromise) => {
             setTimeout(() => {
-              try {
-                uploadTask.cancel();
-              } catch (cancelErr) {
-                console.warn("Could not cancel upload task after timeout:", cancelErr);
-              }
-              rejectPromise(new Error("Firebase Storage upload timed out. Bypassing upload and falling back to ultra-optimized inline image representation."));
+              try { uploadTask.cancel(); } catch (_) {}
+              rejectPromise(new Error("Storage upload timeout"));
             }, 3500);
           })
         ]);
@@ -635,15 +669,12 @@ ${course.title}
         downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
         setUploadProgress(100);
       } catch (storageError: any) {
-        console.warn("Storage upload failed. Falling back to inline base64:", storageError);
-        // Ensure error triggers if it exceeded the physical limit
-        if (storageError?.message?.includes("exceeds 1024") || storageError?.message?.includes("exceeds 2MB limit") || (screenshotFile && screenshotFile.size > 2 * 1024 * 1024)) {
+        if (storageError?.message?.includes("exceeds 2MB limit")) {
           setErrorNotice("Upload failed: File exceeds 2MB limit.");
           setSubmitting(false);
           setUploadProgress(null);
           return;
         }
-        // Fallback to inline preview if storage isn't accessible or configured
         downloadURL = screenshotPreview;
         setUploadProgress(100);
       }
@@ -652,7 +683,6 @@ ${course.title}
         throw new Error("Could not retrieve a valid download URL or base64 data for your screenshot.");
       }
 
-      // 2. Save order to Firestore
       const finalPrice = getDiscountedPrice();
       const originalPrice = Number(selectedCourse?.price || 0);
       const discountApplied = originalPrice - finalPrice;
@@ -679,19 +709,13 @@ ${course.title}
         logUserActivity("Purchase Completed", selectedCourse?.title || "unknown");
       }
       
-      // Clear formulation state
       setOrderTelegram("");
       setScreenshotFile(null);
       setScreenshotPreview("");
       setUploadProgress(null);
     } catch (err: any) {
-      console.error("Order enrollment failed:", err);
       let errorMsg = err?.message || String(err);
-      if (errorMsg.includes("storage/")) {
-        setErrorNotice(`Firebase Storage rejected the upload. Please verify files are under 2MB. Details: ${errorMsg}`);
-      } else {
-        setErrorNotice(`Database rejected enrollment: ${errorMsg}. Please contact digitalcoursesbay@gmail.com.`);
-      }
+      setErrorNotice(`Database rejected enrollment: ${errorMsg}. Please contact support.`);
       try {
         handleFirestoreError(err, OperationType.CREATE, pathString);
       } catch (_) {}
@@ -708,34 +732,101 @@ ${course.title}
     setAppliedCoupon(null);
     setCouponSuccess(false);
     setCouponError(null);
-    navigate('/courses');
+    const catSlug = categoryToSlug(selectedCategory);
+    navigate(catSlug ? `/courses/${catSlug}/` : "/courses");
   };
+
+  // Filter courses loaded so far by user search term
+  const filteredCourses = courses.filter((course) => {
+    const cTitle = course.title || "";
+    const cCategory = course.category || "";
+    const cDescription = course.description || "";
+    const sTerm = searchTerm.toLowerCase();
+
+    return (
+      cTitle.toLowerCase().includes(sTerm) ||
+      cCategory.toLowerCase().includes(sTerm) ||
+      cDescription.toLowerCase().includes(sTerm)
+    );
+  });
+
+  // Invalid Category 404 View
+  if (isInvalidCategory) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center space-y-6 animate-in fade-in duration-300">
+        <SEO 
+          title="Category Not Found | Learn 2 Future"
+          description="The requested course category does not exist on Learn 2 Future."
+          url={`${window.location.origin}/courses/${categorySlug}`}
+        />
+        <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto border border-red-500/20">
+          <Info className="w-8 h-8" />
+        </div>
+        <div className="space-y-2">
+          <h1 className="font-display text-2xl font-bold text-neutral-900 dark:text-white">
+            Category Not Found
+          </h1>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 max-w-md mx-auto">
+            The course category <code className="text-brand-gold font-mono px-2 py-0.5 bg-black/40 rounded">/courses/{categorySlug}</code> does not exist.
+          </p>
+        </div>
+        <Link
+          to="/courses"
+          className="inline-flex items-center gap-2 bg-brand-gold text-black font-display font-bold text-xs px-6 py-3 rounded-xl hover:bg-[#F5B300]/90 transition-all shadow-lg"
+        >
+          <ArrowRight className="w-4 h-4 rotate-180" />
+          <span>Explore All Categories</span>
+        </Link>
+      </div>
+    );
+  }
+
+  const categoryMeta = getCategoryMetadata(selectedCategory);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-12 animate-in fade-in duration-300">
       <SEO 
-        title={selectedCourse ? selectedCourse.title : "Elite Future Tech Courses Catalog"}
-        description={selectedCourse ? selectedCourse.description : "Sign up for our high-impact training curriculum on AI Orchestration, Web3 Systems, and Autonomous Software Agents."}
+        title={selectedCourse ? selectedCourse.title : (selectedCategory !== "All" ? categoryMeta.seoTitle : "All Courses | Learn 2 Future")}
+        description={selectedCourse ? selectedCourse.description : (selectedCategory !== "All" ? categoryMeta.seoDescription : "Explore state-of-the-art modular programs designed to qualify you for global digital freelancing. Secure your seat today.")}
         image={selectedCourse ? selectedCourse.thumbnail : undefined}
-        url={selectedCourse ? `${window.location.origin}/course/${selectedCourse.slug || selectedCourse.id}` : `${window.location.origin}/courses`}
-        canonicalUrl={selectedCourse ? `${window.location.origin}/course/${selectedCourse.slug || selectedCourse.id}` : `${window.location.origin}/courses`}
+        url={selectedCourse ? `${window.location.origin}/course/${selectedCourse.slug || selectedCourse.id}` : `${window.location.origin}${selectedCategory !== "All" ? `/courses/${categoryToSlug(selectedCategory)}/` : "/courses"}`}
+        canonicalUrl={selectedCourse ? `${window.location.origin}/course/${selectedCourse.slug || selectedCourse.id}` : `${window.location.origin}${selectedCategory !== "All" ? `/courses/${categoryToSlug(selectedCategory)}/` : "/courses"}`}
         type={selectedCourse ? "course" : "collection"}
         breadcrumbs={[
           { name: "Home", item: "/" },
-          { name: "Courses", item: "/courses" }
+          { name: "Courses", item: "/courses" },
+          ...(selectedCategory !== "All" ? [{ name: selectedCategory, item: `/courses/${categoryToSlug(selectedCategory)}/` }] : [])
         ]}
       />
       
-      {/* Dynamic Intro Frame */}
+      {/* Breadcrumbs Navigation */}
+      <nav aria-label="Breadcrumb" className="flex items-center space-x-2 text-xs text-neutral-500 dark:text-neutral-400 font-mono">
+        <Link to="/" className="hover:text-brand-gold transition-colors">Home</Link>
+        <span>/</span>
+        <Link 
+          to="/courses" 
+          className={selectedCategory === "All" ? "text-brand-gold font-bold" : "hover:text-brand-gold transition-colors"}
+        >
+          Courses
+        </Link>
+        {selectedCategory !== "All" && (
+          <>
+            <span>/</span>
+            <span className="text-brand-gold font-bold">{selectedCategory}</span>
+          </>
+        )}
+      </nav>
+
+      {/* Dynamic Intro Category Hero Header */}
       <div className="text-center space-y-3 relative py-4">
         <span className="text-xs font-mono font-bold tracking-widest text-brand-gold uppercase">
-          E-Learning Portal
+          {selectedCategory !== "All" ? `${selectedCategory} Catalog` : "E-Learning Portal"}
         </span>
         <h1 className="font-display text-4xl font-bold tracking-tight text-neutral-900 dark:text-white">
-          Acquire Future-Ready Credentials
+          {selectedCategory !== "All" ? categoryMeta.h1 : "Acquire Future-Ready Credentials"}
         </h1>
         <p className="text-neutral-500 dark:text-neutral-400 max-w-xl mx-auto text-sm leading-relaxed">
-          Search or filter our catalog to select your learning tracks and unlock continuous life-upgrades.
+          {selectedCategory !== "All" ? categoryMeta.description : "Search or filter our catalog to select your learning tracks and unlock continuous life-upgrades."}
         </p>
       </div>
 
@@ -747,20 +838,14 @@ ${course.title}
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 dark:text-neutral-400 w-4 h-4" />
           <input
             type="text"
-            placeholder="Search titles, categories, info..."
+            placeholder={selectedCategory !== "All" ? `Search in ${selectedCategory}...` : "Search titles, categories, info..."}
             value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setCurrentPageNo(1);
-            }}
+            onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full bg-neutral-100 dark:bg-[#0b0b0b] border border-neutral-200 dark:border-brand-border rounded-xl pl-10 pr-10 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand-gold transition-colors text-neutral-900 dark:text-white"
           />
           {searchTerm && (
             <button
-              onClick={() => {
-                setSearchTerm("");
-                setCurrentPageNo(1);
-              }}
+              onClick={() => setSearchTerm("")}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-white transition-colors"
               title="Clear search"
             >
@@ -769,162 +854,185 @@ ${course.title}
           )}
         </div>
 
-        {/* Category List Tabs */}
+        {/* Category List Navigation Tabs */}
         <div className="lg:col-span-2 overflow-x-auto flex items-center space-x-2 py-1 scrollbar-none">
           <Filter className="w-4 h-4 text-brand-gold shrink-0 hidden sm:block" />
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => {
-                setSelectedCategory(cat);
-                setCurrentPageNo(1);
-              }}
-              className={`text-xs font-semibold px-3.5 py-2.5 rounded-xl whitespace-nowrap transition-all ${
-                selectedCategory === cat
-                  ? "bg-brand-gold text-black shadow-lg shadow-brand-gold/15"
-                  : "bg-neutral-100 dark:bg-[#0c0c0c] text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-250 dark:hover:bg-[#1f1f1f]"
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
+          {categories.map((cat) => {
+            const catSlug = categoryToSlug(cat);
+            const linkTarget = cat === "All" ? "/courses" : `/courses/${catSlug}/`;
+            const isActive = selectedCategory === cat;
+
+            return (
+              <Link
+                key={cat}
+                to={linkTarget}
+                className={`text-xs font-semibold px-3.5 py-2.5 rounded-xl whitespace-nowrap transition-all ${
+                  isActive
+                    ? "bg-brand-gold text-black shadow-lg shadow-brand-gold/15 font-bold"
+                    : "bg-neutral-100 dark:bg-[#0c0c0c] text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200 dark:hover:bg-[#1f1f1f]"
+                }`}
+              >
+                {cat}
+              </Link>
+            );
+          })}
         </div>
 
       </div>
 
       {/* COURSE DYNAMIC RESOLVING GRID */}
-      {loading ? (
-        <div className="flex justify-center py-20">
-          <div className="w-12 h-12 border-4 border-brand-gold border-t-transparent rounded-full animate-spin"></div>
+      {loadingInitial ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div 
+              key={i} 
+              className="rounded-2xl border border-neutral-200 dark:border-brand-border bg-white dark:bg-[#151515] p-4 space-y-4 animate-pulse"
+            >
+              <div className="aspect-video bg-neutral-200 dark:bg-neutral-800 rounded-xl" />
+              <div className="h-4 bg-neutral-200 dark:bg-neutral-800 rounded w-3/4" />
+              <div className="h-3 bg-neutral-200 dark:bg-neutral-800 rounded w-full" />
+              <div className="h-3 bg-neutral-200 dark:bg-neutral-800 rounded w-2/3" />
+              <div className="h-10 bg-neutral-200 dark:bg-neutral-800 rounded-xl mt-4" />
+            </div>
+          ))}
         </div>
-      ) : totalCourses === 0 ? (
+      ) : filteredCourses.length === 0 ? (
         <div className="text-center py-20 border border-dashed border-neutral-200 dark:border-brand-border rounded-2xl bg-white dark:bg-[#151515] space-y-4">
           <Search className="w-12 h-12 text-neutral-400 mx-auto" />
           <h3 className="font-display text-lg font-bold text-neutral-600 dark:text-neutral-400">
             No matching courses found
           </h3>
           <p className="text-xs text-neutral-500 dark:text-neutral-400 max-w-md mx-auto">
-            Try adjusting your search criteria or selecting a different category from the filter cluster above.
+            {searchTerm 
+              ? `No courses in ${selectedCategory} matched "${searchTerm}". Try clearing your search.` 
+              : `No courses found in ${selectedCategory} category yet.`}
           </p>
         </div>
       ) : (
-         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {currentCoursesSlice.map((course) => (
-            <div 
-              key={course.id}
-              className="group flex flex-col justify-between overflow-hidden rounded-2xl border border-neutral-200 dark:border-brand-border bg-white dark:bg-[#151515] hover:shadow-2xl hover:border-brand-gold/40 dark:hover:border-brand-gold/30 transition-all transform duration-300 pointer-events-auto"
-            >
-              {/* Media Container with Link wrapper */}
-              <Link to={`/course/${course.slug || course.id}`} className="aspect-video relative bg-neutral-900 overflow-hidden shrink-0 block">
-                <img 
-                  src={course.thumbnail || null} 
-                  alt={`Course image for ${course.title} - ${course.category} educational training blueprint`}
-                  width="640"
-                  height="360"
-                  loading="lazy"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  onError={(e)=>{
-                    (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=800";
-                  }}
-                />
-                <div className="absolute top-3 left-3 bg-black/75 text-[9px] font-mono font-bold uppercase tracking-widest text-[#F5B300] px-3 py-1 rounded-full border border-brand-gold/20">
-                  {course.category}
-                </div>
-
-                {/* Relocated float share to Top Right Corner */}
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleShareClick(course);
-                  }}
-                  className="absolute top-3 right-3 p-2 bg-black/75 hover:bg-neutral-900 border border-neutral-850 text-white rounded-full transition-all duration-200 scale-100 hover:scale-110 active:scale-95 z-20"
-                  title="Share Course"
-                >
-                  <Share2 className="w-3.5 h-3.5 text-brand-gold" />
-                </button>
-              </Link>
-
-              {/* Course Detail Container */}
-              <div className="p-6 flex flex-col flex-grow justify-between space-y-6">
-                
-                <div className="space-y-4">
-                  <Link to={`/course/${course.slug || course.id}`} className="block">
-                    <h3 className="font-display text-lg font-bold tracking-tight text-neutral-900 dark:text-white leading-snug group-hover:text-brand-gold transition-colors text-left">
-                      {course.title}
-                    </h3>
-                  </Link>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed font-sans line-clamp-3 text-left">
-                    {course.description}
-                  </p>
-                </div>
-
-                <div className="pt-4 border-t border-neutral-100 dark:border-neutral-900/60 flex items-center justify-between">
-                  <div className="text-left">
-                    <span className="text-[9px] text-neutral-400 block font-mono">TUITION PRICE</span>
-                    <span className="font-display text-2xl font-bold text-brand-gold">
-                      ₹{course.price.toLocaleString("en-IN") || course.price}
-                    </span>
+        <div className="space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {filteredCourses.map((course) => (
+              <div 
+                key={course.id}
+                className="group flex flex-col justify-between overflow-hidden rounded-2xl border border-neutral-200 dark:border-brand-border bg-white dark:bg-[#151515] hover:shadow-2xl hover:border-brand-gold/40 dark:hover:border-brand-gold/30 transition-all transform duration-300 pointer-events-auto"
+              >
+                {/* Media Container with Link wrapper */}
+                <Link to={`/course/${course.slug || course.id}`} className="aspect-video relative bg-neutral-900 overflow-hidden shrink-0 block">
+                  <img 
+                    src={course.thumbnail || null} 
+                    alt={`Course image for ${course.title} - ${course.category} educational training blueprint`}
+                    width="640"
+                    height="360"
+                    loading="lazy"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    onError={(e)=>{
+                      (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=800";
+                    }}
+                  />
+                  <div className="absolute top-3 left-3 bg-black/75 text-[9px] font-mono font-bold uppercase tracking-widest text-[#F5B300] px-3 py-1 rounded-full border border-brand-gold/20">
+                    {course.category}
                   </div>
 
-                  <div className="flex gap-2 min-w-0">
-                    {user && hasPurchasedCourse(user.uid, course.id) ? (
-                      <button
-                        onClick={() => setCurrentPage("my-enrollments")}
-                        className="w-full font-display font-medium text-xs bg-emerald-500 hover:bg-emerald-600 text-white py-3 px-6 rounded-xl transition-all scale-100 active:scale-95 duration-200 flex items-center justify-center gap-1.5"
-                      >
-                        <CheckCircle className="w-4 h-4 shrink-0" />
-                        <span>Start Learning</span>
-                      </button>
-                    ) : (
-                      <Link
-                        to={`/course/${course.slug || course.id}`}
-                        className="w-full text-center font-display font-bold text-xs bg-black text-white dark:bg-brand-gold dark:text-black hover:bg-[#F5B300]/95 dark:hover:bg-[#F5B300]/90 hover:text-black py-3 px-6 rounded-xl transition-all scale-100 active:scale-95 duration-200 flex items-center justify-center"
-                      >
-                        View Details
-                      </Link>
-                    )}
-                  </div>
-                </div>
+                  {/* Relocated float share to Top Right Corner */}
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleShareClick(course);
+                    }}
+                    className="absolute top-3 right-3 p-2 bg-black/75 hover:bg-neutral-900 border border-neutral-850 text-white rounded-full transition-all duration-200 scale-100 hover:scale-110 active:scale-95 z-20"
+                    title="Share Course"
+                  >
+                    <Share2 className="w-3.5 h-3.5 text-brand-gold" />
+                  </button>
+                </Link>
 
+                {/* Course Detail Container */}
+                <div className="p-6 flex flex-col flex-grow justify-between space-y-6">
+                  
+                  <div className="space-y-4">
+                    <Link to={`/course/${course.slug || course.id}`} className="block">
+                      <h3 className="font-display text-lg font-bold tracking-tight text-neutral-900 dark:text-white leading-snug group-hover:text-brand-gold transition-colors text-left">
+                        {course.title}
+                      </h3>
+                    </Link>
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed font-sans line-clamp-3 text-left">
+                      {course.description}
+                    </p>
+                  </div>
+
+                  <div className="pt-4 border-t border-neutral-100 dark:border-neutral-900/60 flex items-center justify-between">
+                    <div className="text-left">
+                      <span className="text-[9px] text-neutral-400 block font-mono">TUITION PRICE</span>
+                      <span className="font-display text-2xl font-bold text-brand-gold">
+                        ₹{course.price.toLocaleString("en-IN") || course.price}
+                      </span>
+                    </div>
+
+                    <div className="flex gap-2 min-w-0">
+                      {user && hasPurchasedCourse(user.uid, course.id) ? (
+                        <button
+                          onClick={() => setCurrentPage("my-enrollments")}
+                          className="w-full font-display font-medium text-xs bg-emerald-500 hover:bg-emerald-600 text-white py-3 px-6 rounded-xl transition-all scale-100 active:scale-95 duration-200 flex items-center justify-center gap-1.5"
+                        >
+                          <CheckCircle className="w-4 h-4 shrink-0" />
+                          <span>Start Learning</span>
+                        </button>
+                      ) : (
+                        <Link
+                          to={`/course/${course.slug || course.id}`}
+                          className="w-full text-center font-display font-bold text-xs bg-black text-white dark:bg-brand-gold dark:text-black hover:bg-[#F5B300]/95 dark:hover:bg-[#F5B300]/90 hover:text-black py-3 px-6 rounded-xl transition-all scale-100 active:scale-95 duration-200 flex items-center justify-center"
+                        >
+                          View Details
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
               </div>
+            ))}
+          </div>
+
+          {/* Skeleton Loaders during Infinite Scroll next page load */}
+          {loadingMore && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pt-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div 
+                  key={`loading-more-skeleton-${i}`} 
+                  className="rounded-2xl border border-neutral-200 dark:border-brand-border bg-white dark:bg-[#151515] p-4 space-y-4 animate-pulse"
+                >
+                  <div className="aspect-video bg-neutral-200 dark:bg-neutral-800 rounded-xl" />
+                  <div className="h-4 bg-neutral-200 dark:bg-neutral-800 rounded w-3/4" />
+                  <div className="h-3 bg-neutral-200 dark:bg-neutral-800 rounded w-full" />
+                  <div className="h-10 bg-neutral-200 dark:bg-neutral-800 rounded-xl mt-4" />
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       )}
 
-      {/* COMPREHENSIVE PAGINATION FLIGHT */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center space-x-2 pt-6">
-          <button
-            onClick={() => handlePageChange(currentPageNo - 1)}
-            disabled={currentPageNo === 1}
-            className="p-2.5 rounded-lg border border-neutral-200 dark:border-brand-border text-neutral-500 hover:bg-neutral-150 dark:hover:bg-[#181818] disabled:opacity-40"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          
-          {Array.from({ length: totalPages }, (_, index) => (
-            <button
-              key={index + 1}
-              onClick={() => handlePageChange(index + 1)}
-              className={`w-10 h-10 rounded-lg text-xs font-semibold ${
-                currentPageNo === index + 1
-                  ? "bg-brand-gold text-black shadow-lg"
-                  : "border border-neutral-200 dark:border-brand-border text-neutral-550 dark:text-neutral-400 hover:bg-neutral-150 dark:hover:bg-[#1a1a1a]"
-              }`}
-            >
-              {index + 1}
-            </button>
-          ))}
+      {/* Sentinel element for IntersectionObserver near bottom */}
+      <div ref={sentinelRef} className="h-8 w-full my-2 pointer-events-none" />
 
+      {/* Error Retry Banner */}
+      {errorLoadingMore && (
+        <div className="text-center py-6 space-y-3 bg-red-500/5 border border-red-500/20 rounded-2xl p-4 max-w-md mx-auto">
+          <p className="text-xs text-red-500 font-sans">Unable to load more courses.</p>
           <button
-            onClick={() => handlePageChange(currentPageNo + 1)}
-            disabled={currentPageNo === totalPages}
-            className="p-2.5 rounded-lg border border-neutral-200 dark:border-brand-border text-neutral-500 hover:bg-neutral-150 dark:hover:bg-[#181818] disabled:opacity-40"
+            onClick={fetchMoreCourses}
+            className="bg-red-500 hover:bg-red-600 text-white font-mono text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-md"
           >
-            <ChevronRight className="w-4 h-4" />
+            Try Again
           </button>
+        </div>
+      )}
+
+      {/* End of Category Subtle Indicator */}
+      {!hasMore && !loadingInitial && filteredCourses.length > 0 && (
+        <div className="text-center py-8 text-neutral-400 dark:text-neutral-500 font-mono text-xs tracking-wider uppercase">
+          ✓ You've reached the end of this category.
         </div>
       )}
 
@@ -933,10 +1041,8 @@ ${course.title}
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="relative w-full max-w-2xl bg-white dark:bg-[#121212] rounded-3xl border border-neutral-200 dark:border-brand-border p-5 sm:p-6 md:p-8 shadow-2xl animate-in scale-in duration-300 max-h-[90vh] overflow-y-auto">
             
-            {/* Background Ornaments */}
             <div className="absolute top-0 right-0 w-48 h-48 bg-brand-gold/5 rounded-full blur-3xl pointer-events-none"></div>
 
-            {/* Header section */}
             <div className="flex items-center justify-between pb-4 border-b border-neutral-205 dark:border-neutral-900 sticky top-0 z-10 bg-white dark:bg-[#121212]">
               <div>
                 <span className="text-[10px] font-mono text-brand-gold font-bold uppercase tracking-wider block">
@@ -955,7 +1061,6 @@ ${course.title}
             </div>
 
             {orderSuccess ? (
-              // Success checkout module state
               <div className="py-10 text-center space-y-6">
                 <div className="w-16 h-16 bg-green-500/15 text-green-500 rounded-full flex items-center justify-center mx-auto">
                   <CheckCircle className="w-10 h-10" />
@@ -969,7 +1074,6 @@ ${course.title}
                   </p>
                 </div>
                 
-                {/* Visual Roadmap next steps */}
                 <div className="p-4 rounded-2xl border bg-black/4 w-full max-w-md mx-auto text-left space-y-3 dark:bg-[#181818]/60 border-neutral-200 dark:border-brand-border/40">
                   <span className="text-[10.5px] uppercase tracking-wider text-brand-gold font-mono font-bold block mb-1">
                     What happens next?
@@ -994,29 +1098,21 @@ ${course.title}
                 </div>
               </div>
             ) : (
-              
-              // Standard Step-By-Step purchase portal view
               <div className="grid grid-cols-1 md:grid-cols-5 gap-6 pt-4">
                 
-                {/* Col 1: steps and upi detail instruction (md:span-3) */}
                 <div className="md:col-span-3 space-y-4">
-                  
-                  {/* Step list block */}
                   <div className="space-y-3.5">
                     <h3 className="text-xs font-mono font-bold text-brand-gold uppercase tracking-wider">
                       UPI Enrollment Protocol
                     </h3>
                     
                     <div className="space-y-2 text-xs text-neutral-500 dark:text-neutral-300">
-                      
-                      {/* Step 1 */}
                       <div className="p-4 bg-neutral-50 dark:bg-brand-card/50 border rounded-xl border-neutral-200 dark:border-brand-border space-y-4">
                         <div className="flex items-center space-x-2">
                           <span className="w-5 h-5 rounded-full bg-brand-gold/20 text-brand-gold flex items-center justify-center font-mono font-bold text-[10px]">1</span>
                           <span className="font-bold text-neutral-900 dark:text-white text-xs uppercase tracking-wide">Make UPI Payment</span>
                         </div>
                         
-                        {/* QR CODE DISPLAY */}
                         <div className="flex flex-col items-center justify-center py-3 bg-white dark:bg-neutral-950/40 rounded-xl border border-neutral-200 dark:border-brand-border/60 shadow-sm">
                           {globalSettings.upiQrCode ? (
                             <img 
@@ -1034,9 +1130,7 @@ ${course.title}
                           <p className="text-[9px] font-mono text-neutral-400 font-semibold uppercase tracking-wider">Scan to Pay Instantly</p>
                         </div>
 
-                        {/* Payment Details Grid */}
                         <div className="space-y-2 text-xs">
-                          {/* UPI ID with copy */}
                           <div className="bg-neutral-100/60 dark:bg-neutral-900/60 p-2.5 rounded-lg border border-neutral-200/50 dark:border-brand-border/50 flex items-center justify-between">
                             <div className="min-w-0">
                               <span className="block text-[9px] font-mono font-bold text-neutral-450 uppercase tracking-widest leading-none mb-1">UPI ID</span>
@@ -1051,13 +1145,11 @@ ${course.title}
                             </button>
                           </div>
 
-                          {/* Account Name */}
                           <div className="p-2.5 bg-neutral-100/30 dark:bg-neutral-900/20 rounded-lg border border-neutral-200/20 dark:border-brand-border/25 flex flex-col">
                             <span className="text-[9px] font-mono font-bold text-neutral-450 uppercase tracking-widest mb-1">Account Name</span>
                             <span className="font-semibold text-neutral-900 dark:text-white text-xs leading-none">{globalSettings.upiAccountName}</span>
                           </div>
 
-                          {/* Amount */}
                           <div className="p-2.5 bg-neutral-100/30 dark:bg-neutral-900/20 rounded-lg border border-neutral-200/20 dark:border-brand-border/25 flex flex-col">
                             <span className="text-[9px] font-mono font-bold text-neutral-450 uppercase tracking-widest mb-1">Amount to Pay</span>
                             <div className="flex items-center gap-1.5 leading-none mt-0.5">
@@ -1074,7 +1166,6 @@ ${course.title}
                         </div>
                       </div>
 
-                      {/* Step 2 */}
                       <div className="p-3 bg-neutral-50 dark:bg-brand-card/50 border rounded-xl border-neutral-200 dark:border-brand-border flex items-center justify-between">
                         <div className="flex items-center space-x-2">
                           <span className="w-5 h-5 rounded-full bg-brand-gold/20 text-brand-gold flex items-center justify-center font-mono font-bold text-[10px]">2</span>
@@ -1090,7 +1181,6 @@ ${course.title}
                         </a>
                       </div>
 
-                      {/* Step 3, 4, 5 */}
                       <div className="p-3 bg-neutral-50 dark:bg-brand-card/50 border rounded-xl border-neutral-200 dark:border-brand-border space-y-1.5">
                         <div className="flex items-start space-x-2">
                           <span className="w-5 h-5 rounded-full bg-brand-gold/20 text-brand-gold flex items-center justify-center font-mono font-bold text-[10px] shrink-0">3</span>
@@ -1101,26 +1191,12 @@ ${course.title}
                         </p>
                       </div>
 
-                      <div className="p-3 bg-neutral-50 dark:bg-brand-card/50 border rounded-xl border-neutral-200 dark:border-brand-border/40 flex items-center space-x-2">
-                        <span className="w-5 h-5 rounded-full bg-neutral-200 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 flex items-center justify-center font-mono text-[10px] shrink-0">4</span>
-                        <p className="text-neutral-500 dark:text-neutral-400">Under Review (Instant verification by administration team)</p>
-                      </div>
-
-                      <div className="p-3 bg-neutral-50 dark:bg-brand-card/50 border rounded-xl border-neutral-200 dark:border-brand-border/40 flex items-center space-x-2">
-                        <span className="w-5 h-5 rounded-full bg-neutral-200 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 flex items-center justify-center font-mono text-[10px] shrink-0">5</span>
-                        <p className="text-neutral-500 dark:text-neutral-400">Course dispatched directly to your Telegram & Email inbox</p>
-                      </div>
-
                     </div>
                   </div>
-
                 </div>
 
-                {/* Col 2: check-out form details (md:span-2) */}
                 <div className="md:col-span-2 space-y-4">
-                  
                   {!user ? (
-                    // Prompt Login before checking out
                     <div className="h-full border border-dashed border-neutral-200 dark:border-brand-border rounded-2xl p-6 flex flex-col justify-center items-center text-center space-y-4 bg-brand-card/20 py-12">
                       <CreditCard className="w-10 h-10 text-brand-gold" />
                       <div className="space-y-1">
@@ -1145,16 +1221,12 @@ ${course.title}
                       )}
                     </div>
                   ) : (
-                    
-                    // Purchase Form representation
                     <form onSubmit={handleCheckoutSubmit} className="space-y-3.5">
                       <h4 className="text-xs font-mono font-bold text-brand-gold uppercase tracking-wider">
                         Enrollment Details
                       </h4>
 
                       <div className="space-y-2.5">
-                        
-                        {/* Name Input */}
                         <div>
                           <label className="block text-[10px] text-neutral-400 uppercase tracking-widest font-mono mb-1">
                             Your Name *
@@ -1168,7 +1240,6 @@ ${course.title}
                           />
                         </div>
 
-                        {/* Email Input */}
                         <div>
                           <label className="block text-[10px] text-neutral-400 uppercase tracking-widest font-mono mb-1">
                             Email Address *
@@ -1182,7 +1253,6 @@ ${course.title}
                           />
                         </div>
 
-                        {/* Telegram username */}
                         <div>
                           <label className="block text-[10px] text-neutral-400 uppercase tracking-widest font-mono mb-1">
                             Telegram Username *
@@ -1200,7 +1270,6 @@ ${course.title}
                           </div>
                         </div>
 
-                        {/* Promo / Coupon Code Input */}
                         <div>
                           <label className="block text-[10px] text-neutral-450 dark:text-neutral-400 uppercase tracking-widest font-mono mb-1">
                             Discount Coupon Code
@@ -1256,7 +1325,6 @@ ${course.title}
                           )}
                         </div>
 
-                        {/* Screenshot upload zone */}
                         <div>
                           <label className="block text-[10px] text-neutral-400 uppercase tracking-widest font-mono mb-1">
                             UPI Transaction Screenshot *
@@ -1309,7 +1377,6 @@ ${course.title}
                           </div>
                         )}
 
-                        {/* Price Summary Receipt Breakdown */}
                         {appliedCoupon && selectedCourse && (
                           <div className="p-3 bg-neutral-50 dark:bg-[#070707] border border-neutral-200 dark:border-brand-border/60 rounded-xl space-y-1.5 text-[11px] font-sans">
                             <div className="flex justify-between text-neutral-500 dark:text-neutral-400">
@@ -1384,7 +1451,6 @@ ${course.title}
       {shareModalOpen && courseToShare && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="relative w-full max-w-md bg-white dark:bg-[#121212] rounded-3xl border border-neutral-200 dark:border-brand-border p-6 md:p-8 shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
-            {/* Header section */}
             <div className="flex items-center justify-between pb-4 border-b border-neutral-200 dark:border-neutral-900 mb-6">
               <div>
                 <span className="text-[10px] font-mono text-brand-gold font-bold uppercase tracking-wider block">
@@ -1405,7 +1471,6 @@ ${course.title}
               </button>
             </div>
 
-            {/* Course mini info card */}
             <div className="flex gap-3 p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-900/40 border border-neutral-200/50 dark:border-brand-border/40 mb-6">
               <img 
                 src={courseToShare.thumbnail || null} 
@@ -1428,7 +1493,6 @@ ${course.title}
               </div>
             </div>
 
-            {/* Auto Generated Share Message Preview */}
             <div className="mb-6 space-y-1.5">
               <span className="block text-[10px] text-neutral-400 uppercase tracking-widest font-mono">
                 Generated Share Preview
@@ -1438,10 +1502,7 @@ ${course.title}
               </div>
             </div>
 
-            {/* Multi-Channel Referral options */}
             <div className="grid grid-cols-2 gap-3 mb-6">
-              
-              {/* WhatsApp */}
               <button
                 onClick={() => {
                   const slug = courseToShare.slug || courseToShare.id;
@@ -1458,7 +1519,6 @@ ${course.title}
                 <span>WhatsApp</span>
               </button>
 
-              {/* Telegram */}
               <button
                 onClick={() => {
                   const slug = courseToShare.slug || courseToShare.id;
@@ -1475,7 +1535,6 @@ ${course.title}
                 <span>Telegram</span>
               </button>
 
-              {/* Facebook */}
               <button
                 onClick={() => {
                   const slug = courseToShare.slug || courseToShare.id;
@@ -1491,7 +1550,6 @@ ${course.title}
                 <span>Facebook</span>
               </button>
 
-              {/* X / Twitter */}
               <button
                 onClick={() => {
                   const slug = courseToShare.slug || courseToShare.id;
@@ -1508,7 +1566,6 @@ ${course.title}
                 <span>Twitter</span>
               </button>
 
-              {/* LinkedIn */}
               <button
                 onClick={() => {
                   const slug = courseToShare.slug || courseToShare.id;
@@ -1524,7 +1581,6 @@ ${course.title}
                 <span>LinkedIn</span>
               </button>
 
-              {/* Copy Link */}
               <button
                 onClick={() => {
                   const slug = courseToShare.slug || courseToShare.id;
@@ -1542,7 +1598,6 @@ ${course.title}
 
             </div>
 
-            {/* Referrer virality support alert */}
             <div className="p-3 rounded-xl bg-brand-gold/5 border border-brand-gold/10 flex items-start gap-2.5">
               <Sparkles className="w-4 h-4 text-brand-gold shrink-0 mt-0.5" />
               <div className="space-y-0.5">

@@ -19,7 +19,8 @@ export const usersService = {
       });
       return list;
     } catch (err) {
-      return handleFirestoreError(err, OperationType.LIST, "users");
+      handleFirestoreError(err, OperationType.LIST, "users");
+      return [];
     }
   },
 
@@ -28,7 +29,7 @@ export const usersService = {
       const docRef = doc(db, "users", userId);
       await updateDoc(docRef, data);
     } catch (err) {
-      return handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
+      handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
     }
   },
 
@@ -37,7 +38,7 @@ export const usersService = {
       const docRef = doc(db, "users", userId);
       await updateDoc(docRef, { disabled });
     } catch (err) {
-      return handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
+      handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
     }
   },
 
@@ -45,7 +46,7 @@ export const usersService = {
     try {
       await deleteDoc(doc(db, "users", userId));
     } catch (err) {
-      return handleFirestoreError(err, OperationType.DELETE, `users/${userId}`);
+      handleFirestoreError(err, OperationType.DELETE, `users/${userId}`);
     }
   }
 };

@@ -21,7 +21,8 @@ export const ordersService = {
       });
       return list;
     } catch (err) {
-      return handleFirestoreError(err, OperationType.LIST, "orders");
+      handleFirestoreError(err, OperationType.LIST, "orders");
+      return [];
     }
   },
 
@@ -30,7 +31,7 @@ export const ordersService = {
       const docRef = doc(db, "orders", orderId);
       await updateDoc(docRef, { status });
     } catch (err) {
-      return handleFirestoreError(err, OperationType.UPDATE, `orders/${orderId}`);
+      handleFirestoreError(err, OperationType.UPDATE, `orders/${orderId}`);
     }
   },
 
@@ -38,7 +39,7 @@ export const ordersService = {
     try {
       await deleteDoc(doc(db, "orders", orderId));
     } catch (err) {
-      return handleFirestoreError(err, OperationType.DELETE, `orders/${orderId}`);
+      handleFirestoreError(err, OperationType.DELETE, `orders/${orderId}`);
     }
   },
 
@@ -51,7 +52,7 @@ export const ordersService = {
       }
       await batch.commit();
     } catch (err) {
-      return handleFirestoreError(err, OperationType.UPDATE, "orders/batch-accept");
+      handleFirestoreError(err, OperationType.UPDATE, "orders/batch-accept");
     }
   }
 };

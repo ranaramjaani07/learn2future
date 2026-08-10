@@ -73,7 +73,7 @@ export function handleFirestoreError(
   error: unknown,
   operationType: OperationType,
   path: string | null
-): never {
+): FirestoreErrorInfo | null {
   const errStr = error instanceof Error ? error.message : String(error);
   const isQuota =
     errStr.toLowerCase().includes("quota") ||
@@ -81,7 +81,9 @@ export function handleFirestoreError(
     errStr.toLowerCase().includes("429");
 
   if (isQuota && typeof window !== "undefined" && (window as any).__onFirestoreQuotaExceeded) {
-    (window as any).__onFirestoreQuotaExceeded();
+    try {
+      (window as any).__onFirestoreQuotaExceeded();
+    } catch (_) {}
   }
 
   const errInfo: FirestoreErrorInfo = {
@@ -97,9 +99,10 @@ export function handleFirestoreError(
   };
 
   if (isQuota) {
-    console.warn("[Firestore] Quota handled gracefully:", JSON.stringify(errInfo, null, 2));
+    console.warn("[Firestore Quota Exceeded] Handled gracefully:", errInfo);
   } else {
-    console.error("[Firestore] Error:", JSON.stringify(errInfo, null, 2));
+    console.warn("[Firestore Error Handled]:", errInfo);
   }
-  throw new Error(JSON.stringify(errInfo));
+
+  return errInfo;
 }

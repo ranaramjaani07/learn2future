@@ -20,7 +20,8 @@ export const contactsService = {
       });
       return list;
     } catch (err) {
-      return handleFirestoreError(err, OperationType.LIST, "contactMessages");
+      handleFirestoreError(err, OperationType.LIST, "contactMessages");
+      return [];
     }
   },
 
@@ -28,7 +29,7 @@ export const contactsService = {
     try {
       await deleteDoc(doc(db, "contactMessages", messageId));
     } catch (err) {
-      return handleFirestoreError(err, OperationType.DELETE, `contactMessages/${messageId}`);
+      handleFirestoreError(err, OperationType.DELETE, `contactMessages/${messageId}`);
     }
   },
 
@@ -40,7 +41,7 @@ export const contactsService = {
       }
       await batch.commit();
     } catch (err) {
-      return handleFirestoreError(err, OperationType.DELETE, "contactMessages/batch-delete");
+      handleFirestoreError(err, OperationType.DELETE, "contactMessages/batch-delete");
     }
   }
 };

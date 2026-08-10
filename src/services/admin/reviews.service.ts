@@ -20,7 +20,8 @@ export const reviewsService = {
       });
       return list;
     } catch (err) {
-      return handleFirestoreError(err, OperationType.LIST, "reviews");
+      handleFirestoreError(err, OperationType.LIST, "reviews");
+      return [];
     }
   },
 
@@ -29,7 +30,7 @@ export const reviewsService = {
       const docRef = doc(db, "reviews", reviewId);
       await updateDoc(docRef, { status });
     } catch (err) {
-      return handleFirestoreError(err, OperationType.UPDATE, `reviews/${reviewId}`);
+      handleFirestoreError(err, OperationType.UPDATE, `reviews/${reviewId}`);
     }
   },
 
@@ -37,7 +38,7 @@ export const reviewsService = {
     try {
       await deleteDoc(doc(db, "reviews", reviewId));
     } catch (err) {
-      return handleFirestoreError(err, OperationType.DELETE, `reviews/${reviewId}`);
+      handleFirestoreError(err, OperationType.DELETE, `reviews/${reviewId}`);
     }
   }
 };

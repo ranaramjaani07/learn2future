@@ -86,6 +86,8 @@ const RichTextEditor = React.lazy(() => import("./RichTextEditor").then(m => ({ 
 const CourseLandingPage = React.lazy(() => import("./CourseLandingPage").then(m => ({ default: m.CourseLandingPage })));
 const SuccessStoriesAdmin = React.lazy(() => import("./SuccessStoriesAdmin").then(m => ({ default: m.SuccessStoriesAdmin })));
 const CrmAnalyticsDashboard = React.lazy(() => import("./CrmAnalyticsDashboard").then(m => ({ default: m.CrmAnalyticsDashboard })));
+import { CategoryCombobox } from "./admin/courses/CategoryCombobox";
+import { L2FChatbotAdmin } from "./admin/chatbot/L2FChatbotAdmin";
 import {
   extractMetaPixelId,
   extractGtmId,
@@ -94,7 +96,7 @@ import {
   extractFacebookDomainVerification,
 } from "../lib/trackingParser";
 
-type AdminTab = "analytics" | "courses" | "orders" | "contacts" | "settings" | "blogs" | "coupons" | "users" | "reviews" | "student-portfolios" | "homepage-settings" | "affiliates";
+type AdminTab = "analytics" | "courses" | "orders" | "contacts" | "settings" | "blogs" | "coupons" | "users" | "reviews" | "student-portfolios" | "homepage-settings" | "affiliates" | "chatbot";
 
 const fallbackCourses = [
   {
@@ -4693,7 +4695,7 @@ export const AdminDashboard: React.FC = () => {
 
       {/* DASH NAVIGATION RAIL */}
       <div className="flex flex-wrap gap-2.5 border-b border-neutral-200 dark:border-brand-border pb-4 mb-6 select-none">
-        {(["analytics", "courses", "orders", "contacts", "settings", "blogs", "coupons", "users", "reviews", "student-portfolios", "homepage-settings", "affiliates"] as AdminTab[]).map((tab) => (
+        {(["analytics", "courses", "orders", "contacts", "chatbot", "settings", "blogs", "coupons", "users", "reviews", "student-portfolios", "homepage-settings", "affiliates"] as AdminTab[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -4703,7 +4705,7 @@ export const AdminDashboard: React.FC = () => {
                 : "text-neutral-500 bg-neutral-50 dark:bg-neutral-900/40 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white border-neutral-200 dark:border-neutral-850"
             }`}
           >
-            {tab === "contacts" ? "Contact Tickets" : tab === "settings" ? "Settings" : tab === "blogs" ? "SEO Blogs" : tab === "coupons" ? "Coupons & Access" : tab === "users" ? "Manage Users" : tab === "reviews" ? "Student Reviews" : tab === "student-portfolios" ? "Student success stories" : tab === "homepage-settings" ? "Homepage CMS & Orbit" : tab === "affiliates" ? "Affiliate Program CRM" : tab}
+            {tab === "contacts" ? "Contact Tickets" : tab === "chatbot" ? "🤖 L2F Chatbot & Inquiries" : tab === "settings" ? "Settings" : tab === "blogs" ? "SEO Blogs" : tab === "coupons" ? "Coupons & Access" : tab === "users" ? "Manage Users" : tab === "reviews" ? "Student Reviews" : tab === "student-portfolios" ? "Student success stories" : tab === "homepage-settings" ? "Homepage CMS & Orbit" : tab === "affiliates" ? "Affiliate Program CRM" : tab}
           </button>
         ))}
       </div>
@@ -10425,22 +10427,12 @@ export const AdminDashboard: React.FC = () => {
                             </div>
                           </div>
                           <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-[9.5px] text-neutral-400 tracking-wider font-mono uppercase mb-1">Category Vertic *</label>
-                              <select 
-                                value={courseCategory} 
-                                onChange={(e) => setCourseCategory(e.target.value)} 
-                                className="w-full bg-neutral-100 dark:bg-black border border-neutral-200 dark:border-brand-border rounded-xl px-3 py-2.5 text-[11px] text-neutral-900 dark:text-white font-medium focus:outline-none"
-                              >
-                                <option value="AI Tools">AI Tools</option>
-                                <option value="Video Editing">Video Editing</option>
-                                <option value="Digital Marketing">Digital Marketing</option>
-                                <option value="YouTube Growth">YouTube Growth</option>
-                                <option value="Freelancing">Freelancing</option>
-                                <option value="Business">Business</option>
-                                <option value="Self Improvement">Self Improvement</option>
-                              </select>
-                            </div>
+                            <CategoryCombobox
+                              value={courseCategory}
+                              onChange={(cat) => setCourseCategory(cat)}
+                              courses={courses}
+                              label="Category Vertic *"
+                            />
                             <div>
                               <label className="block text-[9.5px] text-neutral-400 tracking-wider font-mono uppercase mb-1">Course Status</label>
                               <select 
@@ -11755,6 +11747,13 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
+      {/* TAB 13: L2F CHATBOT & REAL-TIME STUDENT INQUIRIES CONTROL CENTER */}
+      {activeTab === "chatbot" && (
+        <div className="space-y-8 animate-in fade-in duration-200 text-left">
+          <L2FChatbotAdmin />
+        </div>
+      )}
+
       {/* Dynamic Custom Confirmation Modal */}
       {confirmModal && confirmModal.isOpen && (
         <div className="fixed inset-0 z-[100] overflow-y-auto bg-black/85 backdrop-blur-md flex items-center justify-center p-4 select-none">
@@ -11824,3 +11823,5 @@ export const AdminDashboard: React.FC = () => {
     </div>
   );
 };
+
+export default AdminDashboard;

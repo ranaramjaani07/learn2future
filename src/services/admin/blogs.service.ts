@@ -21,7 +21,8 @@ export const blogsService = {
       });
       return list;
     } catch (err) {
-      return handleFirestoreError(err, OperationType.LIST, "blogs");
+      handleFirestoreError(err, OperationType.LIST, "blogs");
+      return [];
     }
   },
 
@@ -41,7 +42,8 @@ export const blogsService = {
         return docRef.id;
       }
     } catch (err) {
-      return handleFirestoreError(err, blogId ? OperationType.UPDATE : OperationType.CREATE, blogId ? `${pathString}/${blogId}` : pathString);
+      handleFirestoreError(err, blogId ? OperationType.UPDATE : OperationType.CREATE, blogId ? `${pathString}/${blogId}` : pathString);
+      return "";
     }
   },
 
@@ -49,7 +51,7 @@ export const blogsService = {
     try {
       await deleteDoc(doc(db, "blogs", blogId));
     } catch (err) {
-      return handleFirestoreError(err, OperationType.DELETE, `blogs/${blogId}`);
+      handleFirestoreError(err, OperationType.DELETE, `blogs/${blogId}`);
     }
   }
 };

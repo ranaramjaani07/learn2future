@@ -338,5 +338,20 @@ service cloud.firestore {
       allow create, update: if isServerCall() || isAdmin();
       allow delete:         if isAdmin();
     }
+
+    // 26. CHATS — Real-time Student Inquiries for L2F Chatbot
+    match /chats/{chatId} {
+      allow read:           if true;
+      allow list:           if isAdmin() || isServerCall();
+      allow create, update: if true;
+      allow delete:         if isAdmin() || isServerCall();
+    }
+
+    // 27. CHATBOT CONFIG — AI Chatbot Settings & Knowledge Base
+    match /chatbot/{docId} {
+      allow read:           if true;
+      allow create, update: if isAdmin() || isServerCall();
+      allow delete:         if isAdmin();
+    }
   }
 }
