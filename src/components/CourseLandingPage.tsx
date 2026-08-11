@@ -6,7 +6,7 @@ import {
   Share2, Globe, ShieldCheck, Check, Info, Lock, ExternalLink, Mail, Phone,
   ChevronDown, ChevronUp, Copy, Send
 } from "lucide-react";
-import { collection, getDocs, addDoc, doc, setDoc, query, where, deleteDoc, updateDoc, serverTimestamp, getDoc } from "firebase/firestore";
+import { collection, getDocs, addDoc, doc, setDoc, query, where, deleteDoc, updateDoc, serverTimestamp, getDoc, limit } from "firebase/firestore";
 import { db } from "../firebase";
 import { Course, Review } from "../types";
 import { SEO } from "./SEO";
@@ -299,23 +299,30 @@ export const CourseLandingPage: React.FC<{ previewCourse?: Course }> = ({ previe
       }
 
       try {
-        // Query from Firestore
-        const coursesSnap = await getDocs(collection(db, "courses"));
-        const tempCourses: Course[] = [];
-        coursesSnap.forEach((docSnap) => {
-          tempCourses.push({ id: docSnap.id, ...docSnap.data() } as Course);
-        });
-        setCourses(tempCourses);
-
-        let found = tempCourses.find(
-          (c) => c.slug === selectedCourseSlug || c.id === selectedCourseSlug
-        );
+        // Targeted Query from Firestore by slug or ID
+        let found: Course | null = null;
+        
+        try {
+          const slugQuery = query(collection(db, "courses"), where("slug", "==", selectedCourseSlug), limit(1));
+          const slugSnap = await getDocs(slugQuery);
+          if (!slugSnap.empty) {
+            const d = slugSnap.docs[0];
+            found = { id: d.id, ...d.data() } as Course;
+          } else {
+            const docSnap = await getDoc(doc(db, "courses", selectedCourseSlug));
+            if (docSnap.exists()) {
+              found = { id: docSnap.id, ...docSnap.data() } as Course;
+            }
+          }
+        } catch (err) {
+          console.warn("[CourseLandingPage] Targeted course query failed, using fallback:", err);
+        }
 
         // Fallback search in default courses
         if (!found) {
           found = DEFAULT_COURSES_FALLBACK.find(
             (c) => c.slug === selectedCourseSlug || c.id === selectedCourseSlug || c.id === "ai-gold"
-          );
+          ) || null;
         }
 
         if (found) {

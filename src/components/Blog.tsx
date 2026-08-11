@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { Blog as BlogType } from "../types";
 import { useApp } from "../context/AppContext";
@@ -1474,10 +1474,25 @@ export const Blog: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
 
   useEffect(() => {
+    const BLOG_CACHE_KEY = "blog_list_cache";
+    const CACHE_TTL = 15 * 60 * 1000;
+
     const fetchBlogs = async () => {
       try {
+        const stored = localStorage.getItem(BLOG_CACHE_KEY);
+        if (stored) {
+          const { ts, data } = JSON.parse(stored);
+          if (Date.now() - ts < CACHE_TTL) {
+            setBlogs(data);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (_) {}
+
+      try {
         const blogsCollection = collection(db, "blogs");
-        const q = query(blogsCollection, orderBy("publishDate", "desc"));
+        const q = query(blogsCollection, orderBy("publishDate", "desc"), limit(12));
         const snapshot = await getDocs(q);
         
         if (snapshot.empty) {
@@ -1512,6 +1527,7 @@ export const Blog: React.FC = () => {
           });
           
           setBlogs(merged);
+          localStorage.setItem(BLOG_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: merged }));
         }
       } catch (error: any) {
         console.warn("Error fetching blogs from Firestore. Using high quality fallback dataset:", error);

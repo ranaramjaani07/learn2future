@@ -131,43 +131,35 @@ const MainLayout: React.FC = () => {
       {/* Universal header navigation */}
       <Navbar />
 
-      {isQuotaExceeded && (
-        <div className="bg-gradient-to-r from-amber-600 to-red-600 text-white py-4 px-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs sm:text-sm font-sans z-50 animate-in slide-in-from-top duration-300 border-b border-amber-500/20">
-          <div className="flex flex-col lg:flex-row items-start lg:items-center gap-3 max-w-7xl mx-auto w-full">
-            <div className="font-bold uppercase tracking-wider bg-black/35 text-amber-300 px-2.5 py-1 rounded text-[10px] whitespace-nowrap border border-amber-500/20 animate-pulse">
-              ⚠️ DB Offline (Quota Exceeded)
+      {isQuotaExceeded && isAdmin && (
+        <div className="bg-[#111111] border-b border-amber-500/30 text-white py-2.5 px-4 shadow-2xl z-50 animate-in slide-in-from-top duration-300">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 max-w-7xl mx-auto text-xs font-sans">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2.5 py-0.5 rounded text-[10px] whitespace-nowrap animate-pulse">
+                🛡️ Admin Incident Notice
+              </span>
+              <span className="text-neutral-200 font-semibold text-xs">
+                Firestore Read Quota Limit Active (<code className="text-amber-300 font-mono text-[11px]">Spark 50k Reads Exceeded</code>)
+              </span>
+              <span className="text-neutral-400 text-[11px] hidden lg:inline">
+                • Public visitors are shielded & viewing cached content.
+              </span>
             </div>
-            <div className="flex-grow space-y-0.5">
-              <p className="font-bold text-sm text-amber-50">Database Limit reached for today (Spark Plan 50,000 daily read limits exhausted).</p>
-              <p className="text-neutral-200 text-[11px] leading-normal font-sans">
-                Google Cloud has temporarily frozen database access on this project. You can still bypass and test every feature live using our local developer sandbox.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2 shrink-0 pt-1 lg:pt-0">
+            <div className="flex items-center gap-2 shrink-0 pt-1 md:pt-0">
+              <button
+                onClick={() => setCurrentPage("admin-dashboard")}
+                className="bg-amber-500 hover:bg-amber-400 text-black font-bold py-1 px-3 rounded-lg text-[11px] transition shadow-sm font-display uppercase tracking-wider cursor-pointer"
+              >
+                Incident Control Dashboard
+              </button>
               <a
                 href="https://console.firebase.google.com/project/gen-lang-client-0184060575/firestore/databases/ai-studio-2980de92-2452-4a19-90f8-80bf9307d675/data?openUpgradeDialog=true"
                 target="_blank"
-                referrerPolicy="no-referrer"
-                className="bg-black/40 hover:bg-black/60 border border-amber-305/30 hover:border-amber-305/50 text-amber-200 font-mono text-[10px] font-bold py-1.5 px-3 rounded-lg transition-all flex items-center gap-1 uppercase tracking-wider"
+                rel="noreferrer"
+                className="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700 py-1 px-2.5 rounded-lg text-[11px] font-mono flex items-center gap-1 transition"
               >
-                Open Google Console <ArrowUpRight className="w-3.5 h-3.5" />
+                Firebase Console <ArrowUpRight className="w-3 h-3" />
               </a>
-              <button
-                onClick={() => {
-                  loginAsDemoStudent();
-                }}
-                className="bg-white hover:bg-neutral-100 text-neutral-900 font-sans text-[10px] font-bold py-1.5 px-3 rounded-lg transition-all shadow-sm uppercase tracking-wider"
-              >
-                Bypass as Student
-              </button>
-              <button
-                onClick={() => {
-                  loginAsDemoAdmin();
-                }}
-                className="bg-amber-400 hover:bg-amber-500 text-black font-sans text-[10px] font-bold py-1.5 px-3 rounded-lg transition-all shadow-sm uppercase tracking-wider"
-              >
-                Bypass as Admin
-              </button>
             </div>
           </div>
         </div>

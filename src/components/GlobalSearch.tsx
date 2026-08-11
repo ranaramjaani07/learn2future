@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { Search, X, BookOpen, User, FileText, Sparkles, ArrowRight, CornerDownLeft } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { db } from "../firebase";
-import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 import { Course, Blog } from "../types";
 
 interface GlobalSearchProps {
@@ -25,6 +25,9 @@ interface SearchItem {
   instructorName?: string;
 }
 
+// Module-level memory cache for global search
+let searchCacheMemory: { courses: Course[]; blogs: Blog[]; timestamp: number } | null = null;
+
 export const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
@@ -41,14 +44,23 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) =
   useEffect(() => {
     if (isOpen) {
       const fetchData = async () => {
+        const now = Date.now();
+        const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+
+        if (searchCacheMemory && (now - searchCacheMemory.timestamp < CACHE_TTL)) {
+          setCourses(searchCacheMemory.courses);
+          setBlogs(searchCacheMemory.blogs);
+          return;
+        }
+
         setLoading(true);
         try {
           const coursesCol = collection(db, "courses");
           const blogsCol = collection(db, "blogs");
 
           const [coursesSnap, blogsSnap] = await Promise.all([
-            getDocs(query(coursesCol, orderBy("createdAt", "desc"))),
-            getDocs(query(blogsCol, orderBy("createdAt", "desc")))
+            getDocs(query(coursesCol, orderBy("createdAt", "desc"), limit(20))),
+            getDocs(query(blogsCol, orderBy("publishDate", "desc"), limit(20)))
           ]);
 
           const loadedCourses = coursesSnap.docs.map(doc => ({
@@ -61,6 +73,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) =
             ...doc.data()
           })) as Blog[];
 
+          searchCacheMemory = { courses: loadedCourses, blogs: loadedBlogs, timestamp: now };
           setCourses(loadedCourses);
           setBlogs(loadedBlogs);
         } catch (error) {

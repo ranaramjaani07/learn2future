@@ -220,8 +220,8 @@ export const StudentPortfolio: React.FC = () => {
 
   const fetchStaticAssets = async () => {
     try {
-      // 1. Fetch courses
-      const courseSnap = await getDocs(collection(db, "courses"));
+      // 1. Fetch supplementary courses catalog (limited)
+      const courseSnap = await getDocs(query(collection(db, "courses"), limit(10)));
       setCourses(courseSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
       // 2. Fetch other published student stories to make internal cross-linking seamless

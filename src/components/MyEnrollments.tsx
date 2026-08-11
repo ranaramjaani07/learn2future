@@ -36,7 +36,7 @@ import {
   AlertTriangle,
   HelpCircle
 } from "lucide-react";
-import { collection, query, where, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, where, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, serverTimestamp, limit } from "firebase/firestore";
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "firebase/auth";
 import { db, auth, handleFirestoreError, OperationType } from "../firebase";
 import { Course, Order } from "../types";
@@ -291,20 +291,32 @@ export const MyEnrollments: React.FC = () => {
     }
   }, [dbUser]);
 
-  // Fetch courses list
+  // Fetch courses list with cache
   useEffect(() => {
+    const COURSES_CACHE_KEY = "enrollments_courses_cache";
+    const CACHE_TTL = 15 * 60 * 1000;
+
     const loadCourses = async () => {
       try {
-        const snapshot = await getDocs(query(collection(db, "courses")));
+        const stored = localStorage.getItem(COURSES_CACHE_KEY);
+        if (stored) {
+          const { ts, data } = JSON.parse(stored);
+          if (Date.now() - ts < CACHE_TTL) {
+            setCourses(data);
+            return;
+          }
+        }
+      } catch (_) {}
+
+      try {
+        const snapshot = await getDocs(query(collection(db, "courses"), limit(20)));
         const list: Course[] = [];
         snapshot.forEach((docSnap) => {
           list.push({ id: docSnap.id, ...docSnap.data() } as Course);
         });
-        if (list.length > 0) {
-          setCourses(list);
-        } else {
-          setCourses(defaultCourses);
-        }
+        const finalCourses = list.length > 0 ? list : defaultCourses;
+        setCourses(finalCourses);
+        localStorage.setItem(COURSES_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: finalCourses }));
       } catch (err) {
         console.warn("Using fallbacks for courses:", err);
         setCourses(defaultCourses);

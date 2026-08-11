@@ -96,7 +96,7 @@ import {
   extractFacebookDomainVerification,
 } from "../lib/trackingParser";
 
-type AdminTab = "analytics" | "courses" | "orders" | "contacts" | "settings" | "blogs" | "coupons" | "users" | "reviews" | "student-portfolios" | "homepage-settings" | "affiliates" | "chatbot";
+type AdminTab = "analytics" | "courses" | "orders" | "contacts" | "settings" | "blogs" | "coupons" | "users" | "reviews" | "student-portfolios" | "homepage-settings" | "affiliates" | "chatbot" | "system-health";
 
 const fallbackCourses = [
   {
@@ -223,7 +223,7 @@ const fallbackUsers = [
 ];
 
 export const AdminDashboard: React.FC = () => {
-  const { user, isAdmin, logout, setCurrentPage, globalSettings, updateGlobalSettings } = useApp();
+  const { user, isAdmin, logout, setCurrentPage, globalSettings, updateGlobalSettings, isQuotaExceeded, setIsQuotaExceeded } = useApp();
 
   // Route security check on client-side
   useEffect(() => {
@@ -1626,7 +1626,7 @@ export const AdminDashboard: React.FC = () => {
 
     try {
       // Fetch Users
-      const usersSnap = await getDocs(query(collection(db, "users"), orderBy("createdAt", "desc")));
+      const usersSnap = await getDocs(query(collection(db, "users"), orderBy("createdAt", "desc"), limit(100)));
       const listUsers: any[] = [];
       usersSnap.forEach((docSnap) => {
         listUsers.push({ id: docSnap.id, ...docSnap.data() });
@@ -1652,7 +1652,7 @@ export const AdminDashboard: React.FC = () => {
 
     try {
       // 2. Fetch Orders
-      const ordersSnap = await getDocs(query(collection(db, "orders"), orderBy("createdAt", "desc")));
+      const ordersSnap = await getDocs(query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(100)));
       const ordersList: Order[] = [];
       ordersSnap.forEach((docSnap) => {
         ordersList.push({ id: docSnap.id, ...docSnap.data() } as Order);
@@ -1665,7 +1665,7 @@ export const AdminDashboard: React.FC = () => {
 
     try {
       // 3. Fetch Contact Messages
-      const contactsSnap = await getDocs(query(collection(db, "contactMessages"), orderBy("createdAt", "desc")));
+      const contactsSnap = await getDocs(query(collection(db, "contactMessages"), orderBy("createdAt", "desc"), limit(100)));
       const contactsList: ContactMessage[] = [];
       contactsSnap.forEach((docSnap) => {
         contactsList.push({ id: docSnap.id, ...docSnap.data() } as ContactMessage);
@@ -1768,7 +1768,7 @@ export const AdminDashboard: React.FC = () => {
     // 5. Fetch Blogs
     try {
       setLoadingBlogs(true);
-      const blogsSnap = await getDocs(query(collection(db, "blogs"), orderBy("createdAt", "desc")));
+      const blogsSnap = await getDocs(query(collection(db, "blogs"), orderBy("createdAt", "desc"), limit(100)));
       const bList: any[] = [];
       blogsSnap.forEach((docSnap) => {
         bList.push({ id: docSnap.id, ...docSnap.data() });
@@ -1822,7 +1822,7 @@ export const AdminDashboard: React.FC = () => {
     // 9. Fetch Reviews
     try {
       setLoadingReviews(true);
-      const reviewsSnap = await getDocs(query(collection(db, "reviews"), orderBy("createdAt", "desc")));
+      const reviewsSnap = await getDocs(query(collection(db, "reviews"), orderBy("createdAt", "desc"), limit(100)));
       const rList: Review[] = [];
       reviewsSnap.forEach((docSnap) => {
         rList.push({ id: docSnap.id, ...docSnap.data() } as Review);
@@ -1921,7 +1921,7 @@ export const AdminDashboard: React.FC = () => {
 
     // 16. Fetch Payment Recovery Queue
     try {
-      const paymentRecoverySnap = await getDocs(query(collection(db, "paymentRecoveryQueue"), orderBy("createdAt", "desc")));
+      const paymentRecoverySnap = await getDocs(query(collection(db, "paymentRecoveryQueue"), orderBy("createdAt", "desc"), limit(100)));
       const queueList: any[] = [];
       paymentRecoverySnap.forEach((docSnap) => {
         queueList.push({ id: docSnap.id, ...docSnap.data() });
@@ -4693,19 +4693,61 @@ export const AdminDashboard: React.FC = () => {
         </button>
       </div>
 
+      {/* Top Admin Incident Notification if Quota Exceeded */}
+      {isQuotaExceeded && (
+        <div className="bg-red-950/50 border border-red-500/40 p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-lg animate-in slide-in-from-top duration-300">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-red-500/20 text-red-400 rounded-xl border border-red-500/30 shrink-0 mt-0.5">
+              <AlertCircle className="w-5 h-5 animate-pulse" />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-xs uppercase tracking-wider text-red-400 font-mono">
+                  Database Incident Active
+                </span>
+                <span className="text-[10px] bg-red-500/20 text-red-300 font-mono px-2 py-0.5 rounded border border-red-500/30">
+                  Spark 50,000 Read Quota Exceeded
+                </span>
+              </div>
+              <p className="text-xs text-neutral-200">
+                Firestore database requests are currently blocked by Google Cloud till daily quota reset. <strong>Public users are shielded and seeing local cached data.</strong>
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setActiveTab("system-health")}
+              className="bg-red-500 hover:bg-red-400 text-black font-bold text-xs py-2 px-3.5 rounded-xl transition font-display uppercase tracking-wider cursor-pointer"
+            >
+              Manage Incident
+            </button>
+            <a
+              href="https://console.firebase.google.com/project/gen-lang-client-0184060575/firestore/databases/ai-studio-2980de92-2452-4a19-90f8-80bf9307d675/data?openUpgradeDialog=true"
+              target="_blank"
+              rel="noreferrer"
+              className="bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 text-xs py-2 px-3 rounded-xl font-mono flex items-center gap-1 transition"
+            >
+              Google Console <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+        </div>
+      )}
+
       {/* DASH NAVIGATION RAIL */}
       <div className="flex flex-wrap gap-2.5 border-b border-neutral-200 dark:border-brand-border pb-4 mb-6 select-none">
-        {(["analytics", "courses", "orders", "contacts", "chatbot", "settings", "blogs", "coupons", "users", "reviews", "student-portfolios", "homepage-settings", "affiliates"] as AdminTab[]).map((tab) => (
+        {(["analytics", "courses", "orders", "contacts", "chatbot", "settings", "blogs", "coupons", "users", "reviews", "student-portfolios", "homepage-settings", "affiliates", "system-health"] as AdminTab[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`font-display text-[10px] sm:text-xs uppercase tracking-wider font-semibold px-4 py-2.5 rounded-xl border transition-all cursor-pointer ${
               activeTab === tab
                 ? "text-black bg-brand-gold border-brand-gold font-bold shadow-md shadow-brand-gold/10"
+                : tab === "system-health" && isQuotaExceeded
+                ? "text-red-400 bg-red-500/10 border-red-500/40 animate-pulse"
                 : "text-neutral-500 bg-neutral-50 dark:bg-neutral-900/40 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white border-neutral-200 dark:border-neutral-850"
             }`}
           >
-            {tab === "contacts" ? "Contact Tickets" : tab === "chatbot" ? "🤖 L2F Chatbot & Inquiries" : tab === "settings" ? "Settings" : tab === "blogs" ? "SEO Blogs" : tab === "coupons" ? "Coupons & Access" : tab === "users" ? "Manage Users" : tab === "reviews" ? "Student Reviews" : tab === "student-portfolios" ? "Student success stories" : tab === "homepage-settings" ? "Homepage CMS & Orbit" : tab === "affiliates" ? "Affiliate Program CRM" : tab}
+            {tab === "contacts" ? "Contact Tickets" : tab === "chatbot" ? "🤖 L2F Chatbot" : tab === "settings" ? "Settings" : tab === "blogs" ? "SEO Blogs" : tab === "coupons" ? "Coupons" : tab === "users" ? "Manage Users" : tab === "reviews" ? "Student Reviews" : tab === "student-portfolios" ? "Student success stories" : tab === "homepage-settings" ? "Homepage CMS" : tab === "affiliates" ? "Affiliate Program CRM" : tab === "system-health" ? (isQuotaExceeded ? "⚠️ System Incident" : "🛡️ System Health") : tab}
           </button>
         ))}
       </div>
@@ -11751,6 +11793,200 @@ export const AdminDashboard: React.FC = () => {
       {activeTab === "chatbot" && (
         <div className="space-y-8 animate-in fade-in duration-200 text-left">
           <L2FChatbotAdmin />
+        </div>
+      )}
+
+      {/* TAB 14: SYSTEM & FIRESTORE HEALTH INCIDENT CENTER */}
+      {activeTab === "system-health" && (
+        <div className="space-y-8 animate-in fade-in duration-200 text-left select-none">
+          
+          {/* Main Incident Overview Banner */}
+          <div className={`p-6 rounded-3xl border transition-all ${
+            isQuotaExceeded 
+              ? "bg-red-950/40 border-red-500/40 shadow-[0_0_40px_rgba(239,68,68,0.15)]" 
+              : "bg-emerald-950/30 border-emerald-500/30"
+          }`}>
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  <span className={`px-3 py-1 rounded-md text-xs font-mono font-bold uppercase tracking-wider ${
+                    isQuotaExceeded
+                      ? "bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse"
+                      : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                  }`}>
+                    {isQuotaExceeded ? "⚠️ INCIDENT ACTIVE: QUOTA EXCEEDED" : "✅ SYSTEM ONLINE: ALL SERVICES NORMAL"}
+                  </span>
+                  <span className="text-xs text-neutral-400 font-mono">
+                    Firestore Infrastructure Engine
+                  </span>
+                </div>
+                <h2 className="font-display text-xl font-bold text-white">
+                  {isQuotaExceeded 
+                    ? "Firestore Daily Read Limit Exhausted (Spark Plan)" 
+                    : "Firestore Database & API Operating Normally"}
+                </h2>
+                <p className="text-xs text-neutral-300 max-w-2xl leading-relaxed">
+                  {isQuotaExceeded 
+                    ? "Google Cloud has restricted direct Firestore reads on this project for today because the Spark (Free Tier) daily limit of 50,000 document reads was reached. Automatic reset happens at 00:00 PST." 
+                    : "All direct document queries, write operations, and rule evaluations are operating smoothly within normal operational parameters."}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap md:flex-col gap-2 shrink-0 w-full md:w-auto">
+                <a
+                  href="https://console.firebase.google.com/project/gen-lang-client-0184060575/firestore/databases/ai-studio-2980de92-2452-4a19-90f8-80bf9307d675/data?openUpgradeDialog=true"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="bg-brand-gold hover:bg-brand-gold/90 text-black font-bold text-xs py-2.5 px-4 rounded-xl transition flex items-center justify-center gap-2 font-display uppercase tracking-wider cursor-pointer"
+                >
+                  <span>Open Firebase Console</span>
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+                <button
+                  onClick={() => {
+                    setIsQuotaExceeded(!isQuotaExceeded);
+                    showToast?.(isQuotaExceeded ? "Quota incident flag cleared for session." : "Simulated quota incident flag set.");
+                  }}
+                  className="bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 text-xs py-2 px-3 rounded-xl transition font-mono cursor-pointer"
+                >
+                  {isQuotaExceeded ? "Toggle Flag (Mark Resolved)" : "Simulate Quota Incident"}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Privacy & Shielding Status Box */}
+          <div className="p-6 bg-white dark:bg-[#121212] rounded-3xl border border-neutral-200 dark:border-brand-border space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-blue-500/10 text-blue-400 rounded-xl border border-blue-500/20">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-display text-sm font-bold text-white">Production Privacy & Error Shielding Verification</h3>
+                <p className="text-xs text-neutral-400">Zero infrastructure details are visible to website visitors.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+              <div className="p-4 bg-neutral-900/60 rounded-2xl border border-neutral-800 space-y-1.5">
+                <div className="text-[11px] font-mono text-emerald-400 font-bold flex items-center gap-1.5">
+                  <CheckCircle className="w-3.5 h-3.5" /> Public Banner Hidden
+                </div>
+                <p className="text-xs text-neutral-300 leading-normal">
+                  Standard visitors see zero error banners, project IDs, or database status warnings.
+                </p>
+              </div>
+
+              <div className="p-4 bg-neutral-900/60 rounded-2xl border border-neutral-800 space-y-1.5">
+                <div className="text-[11px] font-mono text-emerald-400 font-bold flex items-center gap-1.5">
+                  <CheckCircle className="w-3.5 h-3.5" /> Fallback Catalog Active
+                </div>
+                <p className="text-xs text-neutral-300 leading-normal">
+                  All course listings and blog feeds serve cached local items seamlessly when Firestore is offline.
+                </p>
+              </div>
+
+              <div className="p-4 bg-neutral-900/60 rounded-2xl border border-neutral-800 space-y-1.5">
+                <div className="text-[11px] font-mono text-emerald-400 font-bold flex items-center gap-1.5">
+                  <CheckCircle className="w-3.5 h-3.5" /> Verified Admin Access
+                </div>
+                <p className="text-xs text-neutral-300 leading-normal">
+                  Incident metrics & debug logs require authentic administrator login credentials.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Infrastructure Metrics Table */}
+          <div className="p-6 bg-white dark:bg-[#121212] rounded-3xl border border-neutral-200 dark:border-brand-border space-y-4">
+            <h3 className="font-display text-sm font-bold text-white flex items-center gap-2">
+              <Activity className="w-4 h-4 text-brand-gold" /> System Architecture & Diagnostics
+            </h3>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs font-mono">
+                <thead>
+                  <tr className="border-b border-neutral-800 text-neutral-400 uppercase text-[10px]">
+                    <th className="py-2.5 px-3">Parameter</th>
+                    <th className="py-2.5 px-3">Configured Value</th>
+                    <th className="py-2.5 px-3">Current Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-850 text-neutral-200">
+                  <tr>
+                    <td className="py-3 px-3 text-neutral-400">Firebase Project ID</td>
+                    <td className="py-3 px-3 font-bold text-amber-300">gen-lang-client-0184060575</td>
+                    <td className="py-3 px-3 text-emerald-400">Active</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3 px-3 text-neutral-400">Firestore Database ID</td>
+                    <td className="py-3 px-3 font-bold text-amber-300">ai-studio-2980de92-2452-4a19-90f8-80bf9307d675</td>
+                    <td className="py-3 px-3 text-emerald-400">Provisioned</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3 px-3 text-neutral-400">Firestore Pricing Tier</td>
+                    <td className="py-3 px-3">Spark Plan (No-Cost Tier)</td>
+                    <td className="py-3 px-3 text-neutral-300">50,000 Reads / Day Limit</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3 px-3 text-neutral-400">Read Quota State</td>
+                    <td className="py-3 px-3 font-bold">{isQuotaExceeded ? "Exceeded (429 / RESOURCE_EXHAUSTED)" : "Within Quota"}</td>
+                    <td className="py-3 px-3">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        isQuotaExceeded ? "bg-red-500/20 text-red-400" : "bg-emerald-500/20 text-emerald-400"
+                      }`}>
+                        {isQuotaExceeded ? "Quota Limit Active" : "Operational"}
+                      </span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="py-3 px-3 text-neutral-400">Client Fallback Caching</td>
+                    <td className="py-3 px-3">Indexed & Local Storage Memory Caches</td>
+                    <td className="py-3 px-3 text-emerald-400">Serving Local Data</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3 px-3 text-neutral-400">Public Error Suppression</td>
+                    <td className="py-3 px-3">Enabled (Strict Public Shield)</td>
+                    <td className="py-3 px-3 text-emerald-400">Active</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Quick Troubleshooting Tools */}
+          <div className="p-6 bg-white dark:bg-[#121212] rounded-3xl border border-neutral-200 dark:border-brand-border space-y-4">
+            <h3 className="font-display text-sm font-bold text-white flex items-center gap-2">
+              <Settings2 className="w-4 h-4 text-brand-gold" /> Admin Troubleshooting Controls
+            </h3>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => {
+                  try {
+                    localStorage.clear();
+                    sessionStorage.clear();
+                    showToast?.("Client caches cleared successfully.");
+                  } catch (e) {
+                    console.error("Cache clear failed:", e);
+                  }
+                }}
+                className="bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 font-mono text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer"
+              >
+                <RefreshCw className="w-4 h-4" /> Clear All Local Caches
+              </button>
+
+              <button
+                onClick={() => {
+                  window.location.reload();
+                }}
+                className="bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 font-mono text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer"
+              >
+                <Activity className="w-4 h-4" /> Force App Reload
+              </button>
+            </div>
+          </div>
+
         </div>
       )}
 

@@ -2019,7 +2019,7 @@ export const Home: React.FC = () => {
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-center relative z-10">
             <div className="lg:col-span-2 space-y-4 text-center lg:text-left">
-              <h2 className="font-display text-2xl sm:text-4xl font-bold tracking-tight text-neutral-900 dark:text-white">
+              <h2 className="font-display text-2xl sm:text-4xl font-bold tracking-tight text-white bg-black p-2 rounded">
                 Join our Telegram community of <br />
                 <span className="text-brand-gold glow-gold">continuously updating learners</span>
               </h2>

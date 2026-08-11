@@ -1520,11 +1520,13 @@ export const BlogDetails: React.FC = () => {
             logUserActivity("Blog View", `Article: ${activeBlog.title}`);
           }
           
-          // Load related posts (exclude current)
-          const allDocsQuery = query(blogsCol);
-          const allDocsSnap = await getDocs(allDocsQuery);
-          if (!allDocsSnap.empty) {
-            const list: BlogType[] = allDocsSnap.docs
+          // Load related posts (exclude current, limit 4)
+          let relatedSnap = await getDocs(query(blogsCol, where("category", "==", activeBlog.category || "All"), limit(4)));
+          if (relatedSnap.empty) {
+            relatedSnap = await getDocs(query(blogsCol, limit(4)));
+          }
+          if (!relatedSnap.empty) {
+            const list: BlogType[] = relatedSnap.docs
               .map(doc => {
                 const data = doc.data();
                 return {

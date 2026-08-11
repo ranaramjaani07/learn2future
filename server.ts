@@ -354,6 +354,12 @@ function generateQueryMethods(colName: string, filters: any[]): any {
           const text = await response.text();
           if (response.status === 429) {
             isServerQuotaExceeded = true;
+            logServerFirestoreError(`Query on collection ${colName}`, `429 Quota Exceeded`);
+            return {
+              empty: true,
+              size: 0,
+              docs: []
+            };
           }
           throw new Error(`REST structured query failed: ${response.status} ${text}`);
         }
@@ -930,6 +936,13 @@ function formatDate(input: any): string {
   return "2026-06-11";
 }
 
+// In-memory cache stores to protect Firestore read quota
+let sitemapCache: { xml: string; timestamp: number } | null = null;
+let llmsTxtCache: { txt: string; timestamp: number } | null = null;
+let chatbotCoursesCache: { courses: any[]; timestamp: number } | null = null;
+const SITEMAP_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const CHATBOT_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+
 async function fetchAllBlogsForSitemap(): Promise<any[]> {
   try {
     const snap = await adminDb.collection("blogs").orderBy("publishDate", "desc").get();
@@ -979,6 +992,11 @@ async function fetchAllCoursesForSitemap(): Promise<any[]> {
 }
 
 async function buildSitemapXml(host: string = "learn2future.vercel.app"): Promise<string> {
+  const now = Date.now();
+  if (sitemapCache && (now - sitemapCache.timestamp < SITEMAP_CACHE_TTL)) {
+    return sitemapCache.xml;
+  }
+
   const blogs = await fetchAllBlogsForSitemap();
   const courses = await fetchAllCoursesForSitemap();
   
@@ -1082,10 +1100,15 @@ async function buildSitemapXml(host: string = "learn2future.vercel.app"): Promis
   }
 
   xml += "\n</urlset>";
+  sitemapCache = { xml, timestamp: now };
   return xml;
 }
 
 async function buildLlmsTxt(): Promise<string> {
+  const now = Date.now();
+  if (llmsTxtCache && (now - llmsTxtCache.timestamp < SITEMAP_CACHE_TTL)) {
+    return llmsTxtCache.txt;
+  }
   let blogs: any[] = [];
   let courses: any[] = [];
 
@@ -1218,6 +1241,7 @@ async function buildLlmsTxt(): Promise<string> {
   text += `robots.txt: https://learn2future.vercel.app/robots.txt\n`;
   text += `Last Updated: ${new Date().toISOString().split("T")[0]}\n`;
 
+  llmsTxtCache = { txt: text, timestamp: now };
   return text;
 }
 
@@ -1342,8 +1366,13 @@ async function startServer() {
           }, { merge: true });
         }
       }
-    } catch (err) {
-      console.error("[RECOVERY-CYCLE-ERROR] Error executing recovery queue auto-retry cycle:", err);
+    } catch (err: any) {
+      const errStr = err?.message || String(err);
+      if (errStr.includes("429") || errStr.toLowerCase().includes("quota") || isServerQuotaExceeded) {
+        console.warn("[RECOVERY-CYCLE-NOTICE] Recovery auto-retry cycle paused due to Firestore REST API quota limit (Handled gracefully).");
+      } else {
+        console.error("[RECOVERY-CYCLE-ERROR] Error executing recovery queue auto-retry cycle:", err);
+      }
     }
   }
 
@@ -2468,13 +2497,29 @@ Do not include any raw markdown formatting like \`\`\`json or trailing whitespac
     return true;
   }
 
+  async function getCachedCoursesForChatbot() {
+    const now = Date.now();
+    if (chatbotCoursesCache && (now - chatbotCoursesCache.timestamp < CHATBOT_CACHE_TTL)) {
+      return chatbotCoursesCache.courses;
+    }
+    try {
+      const snap = await adminDb.collection("courses").get();
+      if (snap && snap.docs) {
+        const list = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+        chatbotCoursesCache = { courses: list, timestamp: now };
+        return list;
+      }
+    } catch (err) {
+      console.error("[CHATBOT-CACHE] Failed to fetch courses from Firestore:", err);
+    }
+    return chatbotCoursesCache?.courses || [];
+  }
+
   async function executeSearchCourses(args: { query?: string; category?: string; minPrice?: number; maxPrice?: number; limit?: number }) {
     try {
       const limitNum = Math.min(Math.max(args.limit || 6, 1), 10);
-      const snap = await adminDb.collection("courses").get();
-      if (!snap || !snap.docs) return [];
-
-      let courses = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+      let courses = await getCachedCoursesForChatbot();
+      if (!courses || courses.length === 0) return [];
 
       courses = courses.filter((c: any) => c.courseStatus !== "Draft");
 
@@ -2589,13 +2634,12 @@ Do not include any raw markdown formatting like \`\`\`json or trailing whitespac
 
   async function executeGetCategories() {
     try {
-      const snap = await adminDb.collection("courses").get();
       const catSet = new Set<string>();
       ["AI Tools", "Video Editing", "Digital Marketing", "YouTube Growth", "Freelancing", "Business", "Self Improvement"].forEach(c => catSet.add(c));
 
-      if (snap && snap.docs) {
-        snap.docs.forEach((d: any) => {
-          const data = d.data();
+      const courses = await getCachedCoursesForChatbot();
+      if (courses && courses.length > 0) {
+        courses.forEach((data: any) => {
           if (data.category && data.courseStatus !== "Draft") {
             catSet.add(data.category.trim());
           }
