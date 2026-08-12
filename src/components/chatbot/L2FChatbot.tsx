@@ -127,13 +127,16 @@ export const L2FChatbot: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const isSubmittingRef = useRef(false);
+  const lastQueryRef = useRef<{ query: string; time: number }>({ query: "", time: 0 });
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Real-time listener for live Admin responses from Firestore 'chats' collection
+  // Real-time listener attached ONLY when chatbot drawer is open
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId || !isOpen) return;
     try {
       const chatDocRef = doc(db, "chats", sessionId);
       const unsubscribe = onSnapshot(chatDocRef, (snapshot) => {
@@ -148,7 +151,6 @@ export const L2FChatbot: React.FC = () => {
               timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
               courses: m.courses
             }));
-            // Merge with welcome message at the top
             setMessages([WELCOME_MESSAGE, ...mapped]);
           }
         }
@@ -160,7 +162,7 @@ export const L2FChatbot: React.FC = () => {
     } catch (e) {
       console.warn("Could not attach real-time chat listener:", e);
     }
-  }, [sessionId]);
+  }, [sessionId, isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -183,7 +185,15 @@ export const L2FChatbot: React.FC = () => {
 
   const handleSendMessage = async (customQuery?: string) => {
     const queryToSend = customQuery || input.trim();
-    if (!queryToSend || isLoading) return;
+    if (!queryToSend || isLoading || isSubmittingRef.current) return;
+
+    // Deduplicate identical query within 2 seconds
+    const now = Date.now();
+    if (lastQueryRef.current.query === queryToSend && now - lastQueryRef.current.time < 2000) {
+      return;
+    }
+    lastQueryRef.current = { query: queryToSend, time: now };
+    isSubmittingRef.current = true;
 
     const userMsg: ChatMessage = {
       id: `user-${Date.now()}`,
@@ -241,6 +251,7 @@ export const L2FChatbot: React.FC = () => {
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
       setIsLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 

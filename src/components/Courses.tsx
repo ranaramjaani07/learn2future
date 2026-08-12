@@ -14,8 +14,18 @@ import {
   Sparkles,
   Info,
   QrCode,
-  Share2
+  Share2,
+  ChevronLeft,
+  ChevronRight,
+  SlidersHorizontal,
+  RotateCcw,
+  Globe,
+  DollarSign,
+  Layers,
+  ArrowUpDown,
+  Sliders
 } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { collection, getDocs, addDoc, serverTimestamp, query, orderBy, doc, getDoc, limit, where, startAfter, DocumentSnapshot } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage, handleFirestoreError, OperationType } from "../firebase";
@@ -48,6 +58,63 @@ export const Courses: React.FC = () => {
 
   // Search filter term
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Extended Filter & Sort States
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState<string>("All");
+  const [selectedPriceRange, setSelectedPriceRange] = useState<string>("All");
+  const [selectedLevel, setSelectedLevel] = useState<string>("All");
+  const [sortBy, setSortBy] = useState<string>("newest");
+
+  // Category horizontal scroll ref & buttons status
+  const categoryScrollRef = useRef<HTMLDivElement | null>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  const checkCategoryScroll = useCallback(() => {
+    if (categoryScrollRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = categoryScrollRef.current;
+      setCanScrollLeft(scrollLeft > 5);
+      setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 5);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkCategoryScroll();
+    const scrollEl = categoryScrollRef.current;
+    if (scrollEl) {
+      scrollEl.addEventListener("scroll", checkCategoryScroll);
+    }
+    window.addEventListener("resize", checkCategoryScroll);
+    return () => {
+      if (scrollEl) {
+        scrollEl.removeEventListener("scroll", checkCategoryScroll);
+      }
+      window.removeEventListener("resize", checkCategoryScroll);
+    };
+  }, [checkCategoryScroll, categories]);
+
+  const scrollCategories = (direction: "left" | "right") => {
+    if (categoryScrollRef.current) {
+      const amount = direction === "left" ? -250 : 250;
+      categoryScrollRef.current.scrollBy({ left: amount, behavior: "smooth" });
+      setTimeout(checkCategoryScroll, 320);
+    }
+  };
+
+  const activeFilterCount = 
+    (selectedLanguage !== "All" ? 1 : 0) +
+    (selectedPriceRange !== "All" ? 1 : 0) +
+    (selectedLevel !== "All" ? 1 : 0) +
+    (sortBy !== "newest" ? 1 : 0);
+
+  const resetAllFilters = () => {
+    setSearchTerm("");
+    setSelectedLanguage("All");
+    setSelectedPriceRange("All");
+    setSelectedLevel("All");
+    setSortBy("newest");
+  };
 
   // Infinite Scroll & Cursor Pagination States
   const [courses, setCourses] = useState<Course[]>([]);
@@ -89,6 +156,8 @@ export const Courses: React.FC = () => {
       title: "Self-Operative AI Mastery Blueprint",
       category: "AI Tools",
       price: 1999,
+      language: "Hindi",
+      skillLevel: "All Levels",
       description: "Learn how to prompt, configure, and stack autonomous agents with LLMs to automate 80% of your business processes and freelance work. Contains modules on LangChain, AutoGPT, flow creators, custom GPT models, and voice agents.",
       thumbnail: "https://images.unsplash.com/photo-1677442136019-21780efad99a?auto=format&fit=crop&q=80&w=800",
       createdAt: new Date()
@@ -98,6 +167,8 @@ export const Courses: React.FC = () => {
       title: "Cinema-Grade Premiere Pro & After Effects Masterclass",
       category: "Video Editing",
       price: 2499,
+      language: "Hindi",
+      skillLevel: "Beginner",
       description: "A comprehensive deep-dive into digital storytelling, dynamic pacing, keyframing, motion typography, and commercial visual effects editing. Ideal for micro-content editors, YouTube creators, and advertising freelancers.",
       thumbnail: "https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?auto=format&fit=crop&q=80&w=800",
       createdAt: new Date()
@@ -107,6 +178,8 @@ export const Courses: React.FC = () => {
       title: "YouTube Automation & Retention Secrets",
       category: "YouTube Growth",
       price: 1499,
+      language: "Hindi",
+      skillLevel: "Beginner",
       description: "Step-by-step framework to discover highly profitable niches, generate viral scripts, double click-through rates, and engineer retention above 65%. Build cashcow assets that print passive income.",
       thumbnail: "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?auto=format&fit=crop&q=80&w=800",
       createdAt: new Date()
@@ -116,6 +189,8 @@ export const Courses: React.FC = () => {
       title: "High-ROI Digital Marketing & Funnels Blueprint",
       category: "Digital Marketing",
       price: 1899,
+      language: "English",
+      skillLevel: "Intermediate",
       description: "Stop throwing ad-spend away. Master paid advertising on Google & Meta, visual layout analytics, advanced landing page retargeting, and conversational WhatsApp sequences that convert leads into loyal VIP buyers.",
       thumbnail: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&q=80&w=800",
       createdAt: new Date()
@@ -125,6 +200,8 @@ export const Courses: React.FC = () => {
       title: "High-Ticket Freelance Client Acquisition Engine",
       category: "Freelancing",
       price: 2199,
+      language: "Hinglish",
+      skillLevel: "Intermediate",
       description: "Convert basic active bids into retainer agreements. The exact cold outreach loops, Upwork optimization audits, pricing strategies, and portfolio visual assets to close $3,000/mo clients anywhere in the world.",
       thumbnail: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&q=80&w=800",
       createdAt: new Date()
@@ -134,6 +211,8 @@ export const Courses: React.FC = () => {
       title: "Zero-Code SaaS & Digital Business Accelerator",
       category: "Business",
       price: 2999,
+      language: "English",
+      skillLevel: "Advanced",
       description: "Launch, scale, and automate digital micro-SaaS subscriptions. Discover hot markets, build web apps using visual platforms, configure stripe payouts, and manage growth. No coding experience is required.",
       thumbnail: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&q=80&w=800",
       createdAt: new Date()
@@ -736,18 +815,81 @@ ${course.title}
     navigate(catSlug ? `/courses/${catSlug}/` : "/courses");
   };
 
-  // Filter courses loaded so far by user search term
+  // Multi-criteria filtering & sorting for courses loaded
   const filteredCourses = courses.filter((course) => {
     const cTitle = course.title || "";
     const cCategory = course.category || "";
     const cDescription = course.description || "";
-    const sTerm = searchTerm.toLowerCase();
+    const sTerm = searchTerm.toLowerCase().trim();
 
-    return (
-      cTitle.toLowerCase().includes(sTerm) ||
-      cCategory.toLowerCase().includes(sTerm) ||
-      cDescription.toLowerCase().includes(sTerm)
-    );
+    // 1. Search Query
+    if (sTerm) {
+      const matchTitle = cTitle.toLowerCase().includes(sTerm);
+      const matchCat = cCategory.toLowerCase().includes(sTerm);
+      const matchDesc = cDescription.toLowerCase().includes(sTerm);
+      const matchShortDesc = (course.shortDescription || "").toLowerCase().includes(sTerm);
+      const matchInstructor = (course.instructorName || "").toLowerCase().includes(sTerm);
+
+      if (!matchTitle && !matchCat && !matchDesc && !matchShortDesc && !matchInstructor) {
+        return false;
+      }
+    }
+
+    // 2. Language Filter (Hindi, English, Hinglish, Other)
+    if (selectedLanguage !== "All") {
+      const courseLang = (course.language || "").toLowerCase();
+      const targetLang = selectedLanguage.toLowerCase();
+
+      if (courseLang) {
+        if (targetLang === "other") {
+          if (courseLang.includes("hindi") || courseLang.includes("english") || courseLang.includes("hinglish")) {
+            return false;
+          }
+        } else if (!courseLang.includes(targetLang) && !targetLang.includes(courseLang)) {
+          return false;
+        }
+      } else {
+        const textToSearch = (cTitle + " " + cDescription).toLowerCase();
+        if (targetLang === "hindi" && !textToSearch.includes("hindi")) return false;
+        if (targetLang === "english" && !textToSearch.includes("english")) return false;
+        if (targetLang === "hinglish" && !textToSearch.includes("hinglish")) return false;
+        if (targetLang === "other" && (textToSearch.includes("hindi") || textToSearch.includes("english") || textToSearch.includes("hinglish"))) return false;
+      }
+    }
+
+    // 3. Price Filter
+    const effectivePrice = course.offerPrice !== undefined && course.offerPrice !== null ? course.offerPrice : course.price;
+    if (selectedPriceRange === "Free" && effectivePrice > 0) return false;
+    if (selectedPriceRange === "under-500" && (effectivePrice > 500 || effectivePrice <= 0)) return false;
+    if (selectedPriceRange === "500-1500" && (effectivePrice < 500 || effectivePrice > 1500)) return false;
+    if (selectedPriceRange === "1500-3000" && (effectivePrice < 1500 || effectivePrice > 3000)) return false;
+    if (selectedPriceRange === "above-3000" && effectivePrice <= 3000) return false;
+
+    // 4. Level Filter
+    if (selectedLevel !== "All") {
+      const courseLevel = (course.skillLevel || "").toLowerCase();
+      const targetLevel = selectedLevel.toLowerCase();
+
+      if (courseLevel) {
+        if (!courseLevel.includes(targetLevel)) return false;
+      } else {
+        const textToSearch = (cTitle + " " + cDescription).toLowerCase();
+        if (targetLevel === "beginner" && !textToSearch.includes("beginner")) return false;
+        if (targetLevel === "intermediate" && !textToSearch.includes("intermediate")) return false;
+        if (targetLevel === "advanced" && !textToSearch.includes("advanced") && !textToSearch.includes("mastery")) return false;
+      }
+    }
+
+    return true;
+  }).sort((a, b) => {
+    const priceA = a.offerPrice ?? a.price;
+    const priceB = b.offerPrice ?? b.price;
+
+    if (sortBy === "price-low") return priceA - priceB;
+    if (sortBy === "price-high") return priceB - priceA;
+    if (sortBy === "popular") return (b.isPopular ? 1 : 0) - (a.isPopular ? 1 : 0);
+    if (sortBy === "title") return a.title.localeCompare(b.title);
+    return 0;
   });
 
   // Invalid Category 404 View
@@ -831,52 +973,313 @@ ${course.title}
       </div>
 
       {/* FILTER & SEARCH RAIL */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-center bg-white dark:bg-[#151515] p-4 rounded-2xl border border-neutral-200 dark:border-brand-border">
-        
-        {/* Search Input field */}
-        <div className="relative lg:col-span-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 dark:text-neutral-400 w-4 h-4" />
-          <input
-            type="text"
-            placeholder={selectedCategory !== "All" ? `Search in ${selectedCategory}...` : "Search titles, categories, info..."}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-neutral-100 dark:bg-[#0b0b0b] border border-neutral-200 dark:border-brand-border rounded-xl pl-10 pr-10 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand-gold transition-colors text-neutral-900 dark:text-white"
-          />
-          {searchTerm && (
+      <div className="space-y-4">
+        <div className="bg-white dark:bg-[#151515] p-4 rounded-2xl border border-neutral-200 dark:border-brand-border shadow-sm space-y-4">
+          
+          {/* Top Bar: Search Input & Filter Panel Toggle */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            
+            {/* Search Input field */}
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400 dark:text-neutral-500 w-4 h-4" />
+              <input
+                type="text"
+                placeholder={selectedCategory !== "All" ? `Search in ${selectedCategory}...` : "Search by course title, topic, instructor..."}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-neutral-100 dark:bg-[#0b0b0b] border border-neutral-200 dark:border-brand-border rounded-xl pl-10 pr-10 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-gold/60 transition-colors text-neutral-900 dark:text-white"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-white transition-colors p-1"
+                  title="Clear search"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Filter Toggle Button */}
             <button
-              onClick={() => setSearchTerm("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-white transition-colors"
-              title="Clear search"
+              onClick={() => setFilterPanelOpen(!filterPanelOpen)}
+              className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-display text-xs font-bold transition-all cursor-pointer border ${
+                filterPanelOpen || activeFilterCount > 0
+                  ? "bg-brand-gold text-black border-brand-gold shadow-md shadow-brand-gold/10"
+                  : "bg-neutral-100 dark:bg-[#0b0b0b] text-neutral-700 dark:text-neutral-200 border-neutral-200 dark:border-brand-border hover:bg-neutral-200 dark:hover:bg-[#1a1a1a]"
+              }`}
             >
-              <X className="w-4 h-4" />
+              <SlidersHorizontal className="w-4 h-4 shrink-0" />
+              <span>Filters</span>
+              {activeFilterCount > 0 && (
+                <span className="w-5 h-5 rounded-full bg-black text-brand-gold text-[10px] font-bold flex items-center justify-center ml-0.5">
+                  {activeFilterCount}
+                </span>
+              )}
             </button>
-          )}
-        </div>
 
-        {/* Category List Navigation Tabs */}
-        <div className="lg:col-span-2 overflow-x-auto flex items-center space-x-2 py-1 scrollbar-none">
-          <Filter className="w-4 h-4 text-brand-gold shrink-0 hidden sm:block" />
-          {categories.map((cat) => {
-            const catSlug = categoryToSlug(cat);
-            const linkTarget = cat === "All" ? "/courses" : `/courses/${catSlug}/`;
-            const isActive = selectedCategory === cat;
-
-            return (
-              <Link
-                key={cat}
-                to={linkTarget}
-                className={`text-xs font-semibold px-3.5 py-2.5 rounded-xl whitespace-nowrap transition-all ${
-                  isActive
-                    ? "bg-brand-gold text-black shadow-lg shadow-brand-gold/15 font-bold"
-                    : "bg-neutral-100 dark:bg-[#0c0c0c] text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200 dark:hover:bg-[#1f1f1f]"
-                }`}
+            {/* Quick Reset Button if filters active */}
+            {(activeFilterCount > 0 || searchTerm) && (
+              <button
+                onClick={resetAllFilters}
+                className="flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl text-xs font-mono font-medium text-red-500 hover:bg-red-500/10 border border-red-500/20 transition-all cursor-pointer shrink-0"
+                title="Reset all search filters"
               >
-                {cat}
-              </Link>
-            );
-          })}
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Reset</span>
+              </button>
+            )}
+
+          </div>
+
+          {/* Category List Navigation Bar with Left & Right Desktop Scroll Arrows */}
+          <div className="relative flex items-center pt-2 border-t border-neutral-100 dark:border-neutral-900">
+            
+            {/* Left Scroll Button for Desktop/Laptop */}
+            {canScrollLeft && (
+              <button
+                onClick={() => scrollCategories("left")}
+                className="absolute left-0 z-20 p-2 bg-white/95 dark:bg-[#151515]/95 border border-neutral-200 dark:border-neutral-800 text-neutral-800 dark:text-neutral-100 rounded-full shadow-lg hover:bg-neutral-100 dark:hover:bg-[#222] hover:scale-105 active:scale-95 transition-all cursor-pointer backdrop-blur-sm -ml-2"
+                aria-label="Scroll categories left"
+                title="Scroll categories left"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            )}
+
+            {/* Category Scroll Container */}
+            <div
+              ref={categoryScrollRef}
+              className="overflow-x-auto flex items-center space-x-2 py-1 scrollbar-none scroll-smooth w-full px-1"
+            >
+              {categories.map((cat) => {
+                const catSlug = categoryToSlug(cat);
+                const linkTarget = cat === "All" ? "/courses" : `/courses/${catSlug}/`;
+                const isActive = selectedCategory === cat;
+
+                return (
+                  <Link
+                    key={cat}
+                    to={linkTarget}
+                    className={`text-xs font-semibold px-4 py-2.5 rounded-xl whitespace-nowrap transition-all shrink-0 ${
+                      isActive
+                        ? "bg-brand-gold text-black shadow-md shadow-brand-gold/15 font-bold scale-102"
+                        : "bg-neutral-100 dark:bg-[#0c0c0c] text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200 dark:hover:bg-[#1f1f1f]"
+                    }`}
+                  >
+                    {cat}
+                  </Link>
+                );
+              })}
+            </div>
+
+            {/* Right Scroll Button for Desktop/Laptop */}
+            {canScrollRight && (
+              <button
+                onClick={() => scrollCategories("right")}
+                className="absolute right-0 z-20 p-2 bg-white/95 dark:bg-[#151515]/95 border border-neutral-200 dark:border-neutral-800 text-neutral-800 dark:text-neutral-100 rounded-full shadow-lg hover:bg-neutral-100 dark:hover:bg-[#222] hover:scale-105 active:scale-95 transition-all cursor-pointer backdrop-blur-sm -mr-2"
+                aria-label="Scroll categories right"
+                title="Scroll categories right"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
+
+          </div>
+
         </div>
+
+        {/* Expandable Multi-Criteria Filter Panel */}
+        <AnimatePresence>
+          {filterPanelOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0, y: -8 }}
+              animate={{ opacity: 1, height: "auto", y: 0 }}
+              exit={{ opacity: 0, height: 0, y: -8 }}
+              transition={{ duration: 0.25, ease: "easeInOut" }}
+              className="overflow-hidden"
+            >
+              <div className="bg-neutral-50 dark:bg-[#121212] p-5 rounded-2xl border border-neutral-200 dark:border-brand-border shadow-inner grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                
+                {/* 1. Language Filter */}
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-1.5 text-xs font-mono font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                    <Globe className="w-3.5 h-3.5 text-brand-gold" />
+                    <span>Language (भाषा)</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { id: "All", label: "All" },
+                      { id: "Hindi", label: "Hindi (हिंदी)" },
+                      { id: "English", label: "English" },
+                      { id: "Hinglish", label: "Hinglish" },
+                      { id: "Other", label: "Other" }
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => setSelectedLanguage(item.id)}
+                        className={`text-xs px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                          selectedLanguage === item.id
+                            ? "bg-brand-gold text-black font-bold shadow-xs"
+                            : "bg-white dark:bg-[#1a1a1a] text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-800 hover:border-brand-gold/50"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. Price Filter */}
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-1.5 text-xs font-mono font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                    <DollarSign className="w-3.5 h-3.5 text-brand-gold" />
+                    <span>Price Range (कीमत)</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { id: "All", label: "All Prices" },
+                      { id: "Free", label: "Free" },
+                      { id: "under-500", label: "Under ₹500" },
+                      { id: "500-1500", label: "₹500 - ₹1,500" },
+                      { id: "1500-3000", label: "₹1,500 - ₹3,000" },
+                      { id: "above-3000", label: "Above ₹3,000" }
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => setSelectedPriceRange(item.id)}
+                        className={`text-xs px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                          selectedPriceRange === item.id
+                            ? "bg-brand-gold text-black font-bold shadow-xs"
+                            : "bg-white dark:bg-[#1a1a1a] text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-800 hover:border-brand-gold/50"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 3. Skill Level Filter */}
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-1.5 text-xs font-mono font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                    <Layers className="w-3.5 h-3.5 text-brand-gold" />
+                    <span>Skill Level (स्तर)</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { id: "All", label: "All Levels" },
+                      { id: "Beginner", label: "Beginner" },
+                      { id: "Intermediate", label: "Intermediate" },
+                      { id: "Advanced", label: "Advanced" }
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => setSelectedLevel(item.id)}
+                        className={`text-xs px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                          selectedLevel === item.id
+                            ? "bg-brand-gold text-black font-bold shadow-xs"
+                            : "bg-white dark:bg-[#1a1a1a] text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-800 hover:border-brand-gold/50"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 4. Sort By */}
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-1.5 text-xs font-mono font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                    <ArrowUpDown className="w-3.5 h-3.5 text-brand-gold" />
+                    <span>Sort By (क्रमबद्ध करें)</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { id: "newest", label: "Newest First" },
+                      { id: "popular", label: "Most Popular" },
+                      { id: "price-low", label: "Price: Low to High" },
+                      { id: "price-high", label: "Price: High to Low" },
+                      { id: "title", label: "Title: A-Z" }
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => setSortBy(item.id)}
+                        className={`text-xs px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                          sortBy === item.id
+                            ? "bg-brand-gold text-black font-bold shadow-xs"
+                            : "bg-white dark:bg-[#1a1a1a] text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-800 hover:border-brand-gold/50"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Active Filters Bar */}
+        {(activeFilterCount > 0 || searchTerm) && (
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <span className="text-[11px] font-mono text-neutral-400 uppercase tracking-wider">Active Filters:</span>
+            
+            {searchTerm && (
+              <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-neutral-200 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 font-medium">
+                Search: "{searchTerm}"
+                <button onClick={() => setSearchTerm("")} className="hover:text-red-500 transition-colors ml-0.5">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            {selectedLanguage !== "All" && (
+              <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-brand-gold/20 text-brand-gold dark:text-yellow-400 font-medium border border-brand-gold/30">
+                Lang: {selectedLanguage}
+                <button onClick={() => setSelectedLanguage("All")} className="hover:text-red-500 transition-colors ml-0.5">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            {selectedPriceRange !== "All" && (
+              <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-brand-gold/20 text-brand-gold dark:text-yellow-400 font-medium border border-brand-gold/30">
+                Price: {selectedPriceRange}
+                <button onClick={() => setSelectedPriceRange("All")} className="hover:text-red-500 transition-colors ml-0.5">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            {selectedLevel !== "All" && (
+              <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-brand-gold/20 text-brand-gold dark:text-yellow-400 font-medium border border-brand-gold/30">
+                Level: {selectedLevel}
+                <button onClick={() => setSelectedLevel("All")} className="hover:text-red-500 transition-colors ml-0.5">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            {sortBy !== "newest" && (
+              <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-brand-gold/20 text-brand-gold dark:text-yellow-400 font-medium border border-brand-gold/30">
+                Sort: {sortBy}
+                <button onClick={() => setSortBy("newest")} className="hover:text-red-500 transition-colors ml-0.5">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            <button
+              onClick={resetAllFilters}
+              className="text-xs text-red-500 hover:underline font-mono ml-auto cursor-pointer"
+            >
+              Clear All
+            </button>
+          </div>
+        )}
 
       </div>
 
