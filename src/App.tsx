@@ -1,6 +1,8 @@
 import React, { Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AppProvider, useApp } from "./context/AppContext";
+import { IndependenceDayThemeProvider } from "./context/IndependenceDayThemeContext";
+import { IndependenceDayTopBar } from "./components/campaign/IndependenceDayTopBar";
 import { Navbar } from "./components/Navbar";
 import { Footer } from "./components/Footer";
 import { AnimatePresence, motion } from "motion/react";
@@ -128,7 +130,8 @@ const MainLayout: React.FC = () => {
     <div className="min-h-screen flex flex-col justify-between text-neutral-900 dark:text-white transition-colors duration-300">
       <AnimatedBackground />
       {seoData && <SEOHead {...seoData} />}
-      {/* Universal header navigation */}
+      {/* Campaign top bar & Universal header navigation */}
+      <IndependenceDayTopBar />
       <Navbar />
 
       {isQuotaExceeded && isAdmin && (
@@ -380,9 +383,11 @@ import { L2FChatbot } from "./components/chatbot/L2FChatbot";
 export default function App() {
   return (
     <AppProvider>
-      <TrackingManager />
-      <MainLayout />
-      <L2FChatbot />
+      <IndependenceDayThemeProvider>
+        <TrackingManager />
+        <MainLayout />
+        <L2FChatbot />
+      </IndependenceDayThemeProvider>
     </AppProvider>
   );
 }

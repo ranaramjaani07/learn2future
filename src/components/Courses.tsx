@@ -32,6 +32,8 @@ import { db, storage, handleFirestoreError, OperationType } from "../firebase";
 import { Course } from "../types";
 import { SEO } from "./SEO";
 import { categoryToSlug, slugToCategory, getCategoryMetadata, DEFAULT_CATEGORIES } from "../lib/categoryUtils";
+import { useIndependenceDayTheme } from "../context/IndependenceDayThemeContext";
+import { IndependenceDayBadge } from "./campaign/IndependenceDayBadge";
 
 export const Courses: React.FC = () => {
   const navigate = useNavigate();
@@ -48,8 +50,11 @@ export const Courses: React.FC = () => {
     showToast,
     urlCourseSlug,
     setUrlCourseSlug,
-    urlReferrerId
+    urlReferrerId,
+    getCoursePricing
   } = useApp();
+
+  const { isCampaignActive, config: idConfig } = useIndependenceDayTheme();
 
   // Category & Route Resolver State
   const categories = DEFAULT_CATEGORIES;
@@ -1314,7 +1319,9 @@ ${course.title}
       ) : (
         <div className="space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredCourses.map((course) => (
+            {filteredCourses.map((course) => {
+              const cardPricing = getCoursePricing(course);
+              return (
               <div 
                 key={course.id}
                 className="group flex flex-col justify-between overflow-hidden rounded-2xl border border-neutral-200 dark:border-brand-border bg-white dark:bg-[#151515] hover:shadow-2xl hover:border-brand-gold/40 dark:hover:border-brand-gold/30 transition-all transform duration-300 pointer-events-auto"
@@ -1332,8 +1339,18 @@ ${course.title}
                       (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=800";
                     }}
                   />
-                  <div className="absolute top-3 left-3 bg-black/75 text-[9px] font-mono font-bold uppercase tracking-widest text-[#F5B300] px-3 py-1 rounded-full border border-brand-gold/20">
-                    {course.category}
+                  <div className="absolute top-3 left-3 flex flex-col items-start gap-1">
+                    <div className="bg-black/75 text-[9px] font-mono font-bold uppercase tracking-widest text-[#F5B300] px-3 py-1 rounded-full border border-brand-gold/20 flex items-center gap-1">
+                      <span>{course.category}</span>
+                      {cardPricing.hasActiveCampaign && (
+                        <span className="text-emerald-400 font-extrabold ml-1">
+                          • {cardPricing.badgeLabel || "🔥 SALE"}
+                        </span>
+                      )}
+                    </div>
+                    {isCampaignActive && (
+                      <IndependenceDayBadge variant="card" label={idConfig.badgeText ? "🇮🇳 80th INDEPENDENCE SALE" : "🇮🇳 INDEPENDENCE OFFER"} />
+                    )}
                   </div>
 
                   {/* Relocated float share to Top Right Corner */}
@@ -1366,10 +1383,19 @@ ${course.title}
 
                   <div className="pt-4 border-t border-neutral-100 dark:border-neutral-900/60 flex items-center justify-between">
                     <div className="text-left">
-                      <span className="text-[9px] text-neutral-400 block font-mono">TUITION PRICE</span>
-                      <span className="font-display text-2xl font-bold text-brand-gold">
-                        ₹{course.price.toLocaleString("en-IN") || course.price}
+                      <span className="text-[9px] text-neutral-400 block font-mono">
+                        {cardPricing.hasActiveCampaign ? (cardPricing.badgeLabel || "🔥 CAMPAIGN PRICE") : "TUITION PRICE"}
                       </span>
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-display text-2xl font-bold text-emerald-500 dark:text-emerald-400">
+                          ₹{cardPricing.finalPrice.toLocaleString("en-IN")}
+                        </span>
+                        {cardPricing.referencePrice > cardPricing.finalPrice && (
+                          <span className="text-xs text-red-500 font-bold line-through">
+                            ₹{cardPricing.referencePrice.toLocaleString("en-IN")}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex gap-2 min-w-0">
@@ -1394,7 +1420,8 @@ ${course.title}
 
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
 
           {/* Skeleton Loaders during Infinite Scroll next page load */}

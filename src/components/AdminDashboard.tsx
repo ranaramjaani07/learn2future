@@ -82,12 +82,9 @@ import {
 import { ref, uploadBytes as put, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage, handleFirestoreError, OperationType } from "../firebase";
 import { Course, Order, ContactMessage, TrackingSettings, Review, HomepageSettings, HeroOrbitItem } from "../types";
-const RichTextEditor = React.lazy(() => import("./RichTextEditor").then(m => ({ default: m.RichTextEditor })));
-const CourseLandingPage = React.lazy(() => import("./CourseLandingPage").then(m => ({ default: m.CourseLandingPage })));
-const SuccessStoriesAdmin = React.lazy(() => import("./SuccessStoriesAdmin").then(m => ({ default: m.SuccessStoriesAdmin })));
-const CrmAnalyticsDashboard = React.lazy(() => import("./CrmAnalyticsDashboard").then(m => ({ default: m.CrmAnalyticsDashboard })));
 import { CategoryCombobox } from "./admin/courses/CategoryCombobox";
 import { L2FChatbotAdmin } from "./admin/chatbot/L2FChatbotAdmin";
+import { CampaignsManager } from "./admin/campaigns/CampaignsManager";
 import {
   extractMetaPixelId,
   extractGtmId,
@@ -96,7 +93,12 @@ import {
   extractFacebookDomainVerification,
 } from "../lib/trackingParser";
 
-type AdminTab = "analytics" | "courses" | "orders" | "contacts" | "settings" | "blogs" | "coupons" | "users" | "reviews" | "student-portfolios" | "homepage-settings" | "affiliates" | "chatbot" | "system-health";
+const RichTextEditor = React.lazy(() => import("./RichTextEditor").then(m => ({ default: m.RichTextEditor })));
+const CourseLandingPage = React.lazy(() => import("./CourseLandingPage").then(m => ({ default: m.CourseLandingPage })));
+const SuccessStoriesAdmin = React.lazy(() => import("./SuccessStoriesAdmin").then(m => ({ default: m.SuccessStoriesAdmin })));
+const CrmAnalyticsDashboard = React.lazy(() => import("./CrmAnalyticsDashboard").then(m => ({ default: m.CrmAnalyticsDashboard })));
+
+type AdminTab = "analytics" | "courses" | "orders" | "contacts" | "settings" | "blogs" | "coupons" | "campaigns" | "users" | "reviews" | "student-portfolios" | "homepage-settings" | "affiliates" | "chatbot" | "system-health";
 
 const fallbackCourses = [
   {
@@ -4735,7 +4737,7 @@ export const AdminDashboard: React.FC = () => {
 
       {/* DASH NAVIGATION RAIL */}
       <div className="flex flex-wrap gap-2.5 border-b border-neutral-200 dark:border-brand-border pb-4 mb-6 select-none">
-        {(["analytics", "courses", "orders", "contacts", "chatbot", "settings", "blogs", "coupons", "users", "reviews", "student-portfolios", "homepage-settings", "affiliates", "system-health"] as AdminTab[]).map((tab) => (
+        {(["analytics", "courses", "orders", "contacts", "chatbot", "settings", "blogs", "coupons", "campaigns", "users", "reviews", "student-portfolios", "homepage-settings", "affiliates", "system-health"] as AdminTab[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -4747,7 +4749,7 @@ export const AdminDashboard: React.FC = () => {
                 : "text-neutral-500 bg-neutral-50 dark:bg-neutral-900/40 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white border-neutral-200 dark:border-neutral-850"
             }`}
           >
-            {tab === "contacts" ? "Contact Tickets" : tab === "chatbot" ? "🤖 L2F Chatbot" : tab === "settings" ? "Settings" : tab === "blogs" ? "SEO Blogs" : tab === "coupons" ? "Coupons" : tab === "users" ? "Manage Users" : tab === "reviews" ? "Student Reviews" : tab === "student-portfolios" ? "Student success stories" : tab === "homepage-settings" ? "Homepage CMS" : tab === "affiliates" ? "Affiliate Program CRM" : tab === "system-health" ? (isQuotaExceeded ? "⚠️ System Incident" : "🛡️ System Health") : tab}
+            {tab === "contacts" ? "Contact Tickets" : tab === "chatbot" ? "🤖 L2F Chatbot" : tab === "settings" ? "Settings" : tab === "blogs" ? "SEO Blogs" : tab === "coupons" ? "Coupons" : tab === "campaigns" ? "🏷️ Campaigns & Pricing" : tab === "users" ? "Manage Users" : tab === "reviews" ? "Student Reviews" : tab === "student-portfolios" ? "Student success stories" : tab === "homepage-settings" ? "Homepage CMS" : tab === "affiliates" ? "Affiliate Program CRM" : tab === "system-health" ? (isQuotaExceeded ? "⚠️ System Incident" : "🛡️ System Health") : tab}
           </button>
         ))}
       </div>
@@ -7545,6 +7547,11 @@ export const AdminDashboard: React.FC = () => {
               </div>
 
             </div>
+          )}
+
+          {/* TAB: GLOBAL CAMPAIGNS & PRICING MANAGEMENT */}
+          {activeTab === "campaigns" && (
+            <CampaignsManager courses={courses} />
           )}
 
           {/* TAB 8: CLIENT USER DIRECTORY */}

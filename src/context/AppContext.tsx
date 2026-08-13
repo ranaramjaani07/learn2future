@@ -18,7 +18,8 @@ import {
 } from "firebase/auth";
 import { doc, getDoc, getDocs, setDoc, updateDoc, serverTimestamp, collection, addDoc, arrayUnion, deleteDoc, query, where } from "firebase/firestore";
 import { auth, db } from "../firebase";
-import { GlobalSettings, User as DbUser, UserProfile, UserSettings } from "../types";
+import { GlobalSettings, User as DbUser, UserProfile, UserSettings, Campaign } from "../types";
+import { calculateCoursePricing, CalculatedPriceResult } from "../lib/pricingEngine";
 
 export enum OperationType {
   CREATE = 'create',
@@ -162,6 +163,9 @@ interface AppContextType {
   setSelectedStudentUsername: (username: string | null) => void;
   isQuotaExceeded: boolean;
   setIsQuotaExceeded: (val: boolean) => void;
+  campaigns: Campaign[];
+  refreshCampaigns: () => Promise<void>;
+  getCoursePricing: (course: any, coupon?: any) => CalculatedPriceResult;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -261,6 +265,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [authError, setAuthError] = useState<string | null>(null);
 
   const [isQuotaExceeded, setIsQuotaExceeded] = useState<boolean>(false);
+
+  // Global campaigns state
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+
+  const refreshCampaigns = useCallback(async () => {
+    try {
+      const snap = await getDocs(collection(db, "campaigns"));
+      const list: Campaign[] = [];
+      snap.forEach((docSnap) => {
+        list.push({ id: docSnap.id, ...docSnap.data() } as Campaign);
+      });
+      setCampaigns(list);
+    } catch (err) {
+      console.warn("[AppContext] Campaigns fetch error:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshCampaigns();
+  }, [refreshCampaigns]);
+
+  const getCoursePricing = useCallback((course: any, coupon?: any) => {
+    return calculateCoursePricing(course, campaigns, coupon);
+  }, [campaigns]);
 
   // Synchronized global orders state
   const [orders, setOrders] = useState<any[]>([]);
@@ -1235,7 +1263,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         selectedStudentUsername,
         setSelectedStudentUsername,
         isQuotaExceeded,
-        setIsQuotaExceeded
+        setIsQuotaExceeded,
+        campaigns,
+        refreshCampaigns,
+        getCoursePricing
       }}
     >
       {children}

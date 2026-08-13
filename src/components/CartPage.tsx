@@ -24,6 +24,7 @@ export const CartPage: React.FC = () => {
     logUserActivity,
     urlReferrerId,
     showToast,
+    getCoursePricing
   } = useApp();
 
   // Multi-step phase: "review" | "details" | "payment" | "success"
@@ -202,7 +203,8 @@ export const CartPage: React.FC = () => {
     }
   }, [dbUser, user]);
 
-  const cartSubtotal = cart.reduce((acc, curr) => acc + (curr.price * (curr.quantity || 1)), 0);
+  const cartSubtotal = cart.reduce((acc, curr) => acc + (getCoursePricing(curr).finalPrice * (curr.quantity || 1)), 0);
+  const cartReferenceSubtotal = cart.reduce((acc, curr) => acc + (getCoursePricing(curr).referencePrice * (curr.quantity || 1)), 0);
   
   // Calculate discount
   let discountAmount = 0;

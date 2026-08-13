@@ -347,6 +347,64 @@ export interface HomepageSettings {
   orbitLink4?: string;
 }
 
+export type CampaignAdjustmentType = 
+  | "percent_discount" 
+  | "percent_increase" 
+  | "fixed_discount" 
+  | "fixed_increase" 
+  | "fixed_price"
+  | "percentage_increase"
+  | "percentage_decrease"
+  | "fixed_decrease"
+  | "fixed_reference_price";
+
+export type CampaignTargetType = "all" | "category" | "selected_courses";
+
+export type CampaignStatus = "Scheduled" | "Active" | "Paused" | "Expired" | "Archived" | "active" | "scheduled" | "paused" | "ended" | "draft";
+
+export interface Campaign {
+  id?: string;
+  title: string;
+  description?: string;
+  bannerMessage?: string; // e.g. "80th Independence Day Maha Sale - 50% OFF!"
+  badgeLabel?: string;
+  priority?: number;
+  
+  adjustmentType: CampaignAdjustmentType;
+  adjustmentValue: number; // e.g. 50 for 50%, or 100 for ₹100
+  
+  scope?: "global" | "category" | "course";
+  targetType?: CampaignTargetType;
+  targetCategory?: string;
+  targetCourseIds?: string[];
+  
+  // Custom reference price rule
+  referencePriceMode?: string;
+  referencePriceValue?: number;
+  referencePriceMultiplier?: number;
+  customOriginalPrice?: number;
+  
+  startDate: string; // ISO or YYYY-MM-DDTHH:mm
+  endDate: string; // ISO or YYYY-MM-DDTHH:mm
+  
+  status: CampaignStatus;
+  
+  createdAt?: any;
+  updatedAt?: any;
+  createdBy?: string;
+}
+
+export interface PricingAuditLog {
+  id?: string;
+  action: string;
+  campaignId?: string;
+  campaignTitle?: string;
+  adminEmail: string;
+  details: string;
+  affectedCoursesCount?: number;
+  timestamp: any;
+}
+
 export interface HeroOrbitItem {
   id?: string;
   title: string;

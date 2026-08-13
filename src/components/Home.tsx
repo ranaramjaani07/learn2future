@@ -2,6 +2,9 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { SEO } from "./SEO";
 import { useApp } from "../context/AppContext";
+import { useIndependenceDayTheme } from "../context/IndependenceDayThemeContext";
+import { IndependenceDayHeroBanner } from "./campaign/IndependenceDayHeroBanner";
+import { IndependenceDayBadge } from "./campaign/IndependenceDayBadge";
 import { 
   ArrowRight, 
   Send as TelegramIcon, 
@@ -40,6 +43,7 @@ export const Home: React.FC = () => {
     setAuthModalMessage,
     hasPurchasedCourse
   } = useApp();
+  const { isCampaignActive } = useIndependenceDayTheme();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -932,6 +936,13 @@ export const Home: React.FC = () => {
           animation-play-state: paused;
         }
       `}} />
+
+      {/* INDEPENDENCE DAY CAMPAIGN HERO BANNER OVERLAY */}
+      {isCampaignActive && (
+        <section className="pt-4 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+          <IndependenceDayHeroBanner />
+        </section>
+      )}
 
       {/* SECTION 1: DYNAMIC CMS LUXURY HERO + ORBIT SYSTEM */}
       <section className="relative overflow-hidden pt-12 md:pt-20 select-none">

@@ -258,7 +258,8 @@ export const CourseLandingPage: React.FC<{ previewCourse?: Course }> = ({ previe
     addToCart,
     showToast,
     hasPurchasedCourse,
-    logUserActivity
+    logUserActivity,
+    getCoursePricing
   } = useApp();
 
   const [localCourse, setLocalCourse] = useState<Course | null>(null);
@@ -686,6 +687,9 @@ export const CourseLandingPage: React.FC<{ previewCourse?: Course }> = ({ previe
     );
   }
 
+  // Get dynamic campaign & reference pricing
+  const pricing = getCoursePricing(course);
+
   // Get related filtered listings
   const relatedCourses = courses
     .filter((c) => c.id !== course.id)
@@ -725,8 +729,10 @@ export const CourseLandingPage: React.FC<{ previewCourse?: Course }> = ({ previe
         </div>
         <div className="flex items-center gap-4">
           <div className="text-right">
-            <span className="text-xs text-neutral-450 dark:text-neutral-400 line-through">₹{course.originalPrice?.toLocaleString()}</span>
-            <div className="text-lg font-bold font-display text-brand-gold">₹{course.offerPrice?.toLocaleString()}</div>
+            {pricing.referencePrice > pricing.finalPrice && (
+              <span className="text-xs text-red-500 font-bold line-through mr-1.5">₹{pricing.referencePrice.toLocaleString()}</span>
+            )}
+            <div className="text-lg font-bold font-display text-emerald-400">₹{pricing.finalPrice.toLocaleString()}</div>
           </div>
           <button
             onClick={handleEnrollDirect}
@@ -853,13 +859,23 @@ export const CourseLandingPage: React.FC<{ previewCourse?: Course }> = ({ previe
           </div>
 
           <div className="space-y-2">
-            <span className="text-[10px] font-mono uppercase text-neutral-500 tracking-wider">Premium Access License Fee</span>
-            <div className="flex items-baseline gap-3">
-              <span className="text-3xl font-black font-display text-neutral-900 dark:text-white">₹{(course.offerPrice || course.price).toLocaleString()}</span>
-              <span className="text-sm text-neutral-400 line-through">₹{course.originalPrice?.toLocaleString()}</span>
-              <span className="text-xs font-mono font-bold bg-green-500/10 text-green-500 border border-green-500/20 py-1 px-2.5 rounded-lg">
-                SAVE {Math.round(((course.originalPrice! - course.offerPrice!) / course.originalPrice!) * 100)}%
+            <span className="text-[10px] font-mono uppercase text-neutral-500 tracking-wider">
+              {pricing.hasActiveCampaign ? (pricing.badgeLabel || "🔥 Special Campaign Pricing") : "Premium Access License Fee"}
+            </span>
+            <div className="flex items-baseline gap-3 flex-wrap">
+              <span className="text-3xl font-black font-display text-emerald-500 dark:text-emerald-400">
+                ₹{pricing.finalPrice.toLocaleString()}
               </span>
+              {pricing.referencePrice > pricing.finalPrice && (
+                <span className="text-base text-red-500 font-bold line-through opacity-85">
+                  ₹{pricing.referencePrice.toLocaleString()}
+                </span>
+              )}
+              {pricing.discountPercentage > 0 && (
+                <span className="text-xs font-mono font-bold bg-green-500/10 text-green-500 border border-green-500/20 py-1 px-2.5 rounded-lg">
+                  {pricing.badgeLabel ? pricing.badgeLabel : `SAVE ${pricing.discountPercentage}%`}
+                </span>
+              )}
             </div>
             <p className="text-[11px] text-emerald-600 dark:text-emerald-500 font-mono">✓ Unlocks immediate verified entry on classroom credentials</p>
           </div>

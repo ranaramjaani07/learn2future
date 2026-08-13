@@ -820,6 +820,14 @@
     "/chatbot/{docId}": {
       "schema": "chatbotConfig",
       "description": "AI Chatbot configuration and knowledge base settings"
+    },
+    "/campaigns/{campaignId}": {
+      "schema": "campaign",
+      "description": "Global and targeted pricing discount campaigns"
+    },
+    "/pricingAuditLogs/{logId}": {
+      "schema": "pricingAuditLog",
+      "description": "Audit history of pricing and campaign modifications"
     }
   }
 }
