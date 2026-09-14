@@ -7,7 +7,6 @@ import {
   Award, 
   Cpu, 
   Zap, 
-  Sparkles, 
   Target, 
   CheckCircle,
   TrendingUp,

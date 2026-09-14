@@ -419,7 +419,7 @@ ${course.title}
         }
         setHasMore(docs.length === 6);
       } else {
-        const filtered = selectedCategory === "All"
+        const filtered = selected === "All"
           ? defaultCourses
           : defaultCourses.filter(c => c.category.toLowerCase() === selectedCategory.toLowerCase());
         const offset = courses.length;

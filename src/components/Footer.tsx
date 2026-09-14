@@ -25,7 +25,7 @@ export const Footer: React.FC = () => {
                 L2F
               </div>
               <span className="font-display text-lg font-bold text-neutral-900 dark:text-white flex items-center gap-1">
-                Learn 2 Future <Sparkles className="w-4 h-4 text-brand-gold" />
+                Learn 2 Future 
               </span>
             </div>
             <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-6 max-w-sm">

@@ -35,7 +35,6 @@ import {
   ShieldCheck, 
   Lock,
   Smartphone, 
-  Sparkles,
   ExternalLink,
   ChevronRight,
   Eye,

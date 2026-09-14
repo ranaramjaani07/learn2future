@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../context/AppContext";
-import { useIndependenceDayTheme } from "../context/IndependenceDayThemeContext";
 import { IndependenceDayBadge } from "./campaign/IndependenceDayBadge";
 import { motion } from "motion/react";
 import { 
@@ -100,7 +99,7 @@ export const Navbar: React.FC = () => {
             />
             <div className="flex flex-col">
               <span className="font-display text-xl font-bold tracking-tight text-neutral-900 dark:text-white flex items-center gap-1.5">
-                Learn 2 Future <Sparkles className="w-4 h-4 text-brand-gold" />
+                Learn 2 Future 
                 {isCampaignActive && <IndependenceDayBadge variant="navbar" label={config.badgeText ? "80th INDEPENDENCE DAY" : "MAHA SALE"} />}
               </span>
               <span className="text-[10px] uppercase tracking-widest text-[#F5B300] font-mono leading-none">
