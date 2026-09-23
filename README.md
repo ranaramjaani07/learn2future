@@ -1,5 +1,5 @@
-<div align="center">
-  <img width="1200" height="420" alt="Learn 2 Future Banner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" style="border-radius: 12px; margin-bottom: 24px;" />
+
+
 
   # 🚀 Learn 2 Future
   ### *The Ultimate Premium E-Learning Hub & Affiliate Ecosystem*
